@@ -780,8 +780,7 @@ size_t HashFilter::Put2(const byte *inString, size_t length, int messageEnd, boo
 	FILTER_BEGIN;
 	if (m_putMessage)
 		FILTER_OUTPUT3(1, 0, inString, length, 0, m_messagePutChannel);
-	if (inString && length)
-		m_hashModule.Update(inString, length);
+	m_hashModule.Update(inString, length);
 	if (messageEnd)
 	{
 		{

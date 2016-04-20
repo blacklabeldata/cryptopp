@@ -25,8 +25,6 @@ bench.cpp
 bench.h
 bench2.cpp
 bfinit.cpp
-blake2.cpp
-blake2.h
 blowfish.cpp
 blowfish.h
 blumshub.cpp
@@ -305,8 +303,6 @@ License.txt
 Readme.txt
 Install.txt
 Filelist.txt
-CMakeLists.txt
-cryptopp-config.cmake
 TestData/3desval.dat
 TestData/3wayval.dat
 TestData/camellia.dat
@@ -365,9 +361,6 @@ TestData/xtrdh342.dat
 TestVectors/Readme.txt
 TestVectors/aes.txt
 TestVectors/all.txt
-TestVectors/blake2.txt
-TestVectors/blake2b.txt
-TestVectors/blake2s.txt
 TestVectors/camellia.txt
 TestVectors/ccm.txt
 TestVectors/cmac.txt

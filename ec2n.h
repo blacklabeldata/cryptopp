@@ -11,7 +11,6 @@
 #include "cryptlib.h"
 #include "gf2n.h"
 #include "integer.h"
-#include "algebra.h"
 #include "eprecomp.h"
 #include "smartptr.h"
 #include "pubkey.h"

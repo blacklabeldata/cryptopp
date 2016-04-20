@@ -7,7 +7,6 @@
 #include "cryptlib.h"
 #include "gfpcrypt.h"
 #include "integer.h"
-#include "algebra.h"
 #include "secblock.h"
 
 #if CRYPTOPP_MSC_VERSION

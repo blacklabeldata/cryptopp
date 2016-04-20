@@ -11,16 +11,13 @@
 
 NAMESPACE_BEGIN(CryptoPP)
 
-//! \class Serpent_Info
-//! \brief Serpent block cipher information
+//! _
 struct Serpent_Info : public FixedBlockSize<16>, public VariableKeyLength<16, 0, 32>, public FixedRounds<32>
 {
 	static const char *StaticAlgorithmName() {return "Serpent";}
 };
 
-//! \class Serpent
-//! \brief Serpent block cipher
-/// \sa <a href="http://www.weidai.com/scan-mirror/cs.html#Serpent">Serpent</a>
+/// <a href="http://www.weidai.com/scan-mirror/cs.html#Serpent">Serpent</a>
 class Serpent : public Serpent_Info, public BlockCipherDocumentation
 {
 	class CRYPTOPP_NO_VTABLE Base : public BlockCipherImpl<Serpent_Info>

@@ -1,7 +1,8 @@
 // rdrand.h - written and placed in public domain by Jeffrey Walton and Uri Blumenthal.
 //            Copyright assigned to Crypto++ project.
 
-//! \file rdrand.h
+//! \file
+//! \headerfile rdrand.h
 //! \brief Classes for RDRAND and RDSEED
 
 #ifndef CRYPTOPP_RDRAND_H
@@ -14,8 +15,8 @@
 //   indirectly uses CRYPTOPP_BOOL_{X86|X32|X64} (via CRYPTOPP_CPUID_AVAILABLE)
 //   to select an implementation or "throw NotImplemented". At runtime, the
 //   class uses the result of CPUID to determine if RDRAND or RDSEED are
-//   available. If not available, a lazy throw strategy is used. I.e., the
-//   throw is deferred until GenerateBlock() is called.
+//   available. A lazy throw strategy is used in case the CPU does not support
+//   the instruction. I.e., the throw is deferred until GenerateBlock() is called.
 
 // Microsoft added RDRAND in August 2012, VS2012. GCC added RDRAND in December 2010, GCC 4.6.
 // Clang added RDRAND in July 2012, Clang 3.2. Intel added RDRAND in September 2011, ICC 12.1.
@@ -42,10 +43,7 @@ public:
 	//! \param retries the number of retries for failed calls to the hardware
 	//! \details RDRAND() constructs a generator with a maximum number of retires
 	//!   for failed generation attempts.
-	//! \details Empirical testing under a 6th generaton i7 (6200U) shows RDSEED fails
-	//!   to fulfill requests at about 6 to 8 times the rate of RDRAND. The default
-	//!   retries reflects the difference.
-	RDRAND(unsigned int retries = 12) : m_retries(retries) {}
+	RDRAND(unsigned int retries = 8) : m_retries(retries) {}
 	
 	virtual ~RDRAND() {}
 	
@@ -89,7 +87,7 @@ public:
 	}
 #endif
 
-	//! \brief Update RNG state with additional unpredictable values
+	//! Update RNG state with additional unpredictable values
 	//! \param input unused
 	//! \param length unused
 	//! \details The operation is a nop for this generator.
@@ -97,7 +95,7 @@ public:
 	{
 		// Override to avoid the base class' throw.
 		CRYPTOPP_UNUSED(input); CRYPTOPP_UNUSED(length);
-		// assert(0); // warn in debug builds
+		assert(0); // warn in debug builds
 	}
 
 private:
@@ -124,10 +122,7 @@ public:
 	//! \param retries the number of retries for failed calls to the hardware
 	//! \details RDSEED() constructs a generator with a maximum number of retires
 	//!   for failed generation attempts.
-	//! \details Empirical testing under a 6th generaton i7 (6200U) shows RDSEED fails
-	//!   to fulfill requests at about 6 to 8 times the rate of RDRAND. The default
-	//!   retries reflects the difference.
-	RDSEED(unsigned int retries = 64) : m_retries(retries) {}
+	RDSEED(unsigned int retries = 8) : m_retries(retries) {}
 	
 	virtual ~RDSEED() {}
 	
@@ -171,7 +166,7 @@ public:
 	}
 #endif
 
-	//! \brief Update RNG state with additional unpredictable values
+	//! Update RNG state with additional unpredictable values
 	//! \param input unused
 	//! \param length unused
 	//! \details The operation is a nop for this generator.
@@ -179,7 +174,7 @@ public:
 	{
 		// Override to avoid the base class' throw.
 		CRYPTOPP_UNUSED(input); CRYPTOPP_UNUSED(length);
-		// assert(0); // warn in debug builds
+		assert(0); // warn in debug builds
 	}
 
 private:

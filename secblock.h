@@ -224,15 +224,8 @@ public:
 		return StandardReallocate(*this, oldPtr, oldSize, newSize, preserve);
 	}
 
-	//! \brief Template class memeber Rebind
-	//! \tparam T allocated class or type
-	//! \tparam T_Align16 boolean that determines whether allocations should be aligned on 16-byte boundaries
-	//! \tparam U bound class or type
-	//! \details Rebind allows a container class to allocate a different type of object
-	//!   to store elements. For example, a std::list will allocate std::list_node to
-	//!   store elements in the list.
-	//! \details VS.NET STL enforces the policy of "All STL-compliant allocators
-	//!   have to provide a template class member called rebind".
+	// VS.NET STL enforces the policy of "All STL-compliant allocators have to provide a
+	// template class member called rebind".
     template <class U> struct rebind { typedef AllocatorWithCleanup<U, T_Align16> other; };
 #if _MSC_VER >= 1500
 	AllocatorWithCleanup() {}
@@ -260,7 +253,6 @@ template <class T>
 class NullAllocator : public AllocatorBase<T>
 {
 public:
-	//LCOV_EXCL_START
 	CRYPTOPP_INHERIT_ALLOCATOR_TYPES
 
 	// TODO: should this return NULL or throw bad_alloc? Non-Windows C++ standard
@@ -279,7 +271,6 @@ public:
 	}
 
 	size_type max_size() const {return 0;}
-	//LCOV_EXCL_STOP
 };
 
 //! \class FixedSizeAllocatorWithCleanup
@@ -406,7 +397,7 @@ public:
 		if (preserve && newSize)
 		{
 			const size_t copySize = STDMIN(oldSize, newSize);
-			memcpy_s(newPointer, sizeof(T)*newSize, oldPtr, sizeof(T)*copySize);
+			memcpy_s(newPointer, copySize, oldPtr, copySize);
 		}
 		deallocate(oldPtr, oldSize);
 		return newPointer;
@@ -415,15 +406,13 @@ public:
 	size_type max_size() const {return STDMAX(m_fallbackAllocator.max_size(), S);}
 
 private:
-
 #ifdef __BORLANDC__
 	T* GetAlignedArray() {return m_array;}
 	T m_array[S];
 #else
-	T* GetAlignedArray() {return (CRYPTOPP_BOOL_ALIGN16 && T_Align16) ? (T*)(void *)(((byte *)m_array) + (0-(size_t)m_array)%16) : m_array;}
+	T* GetAlignedArray() {return (CRYPTOPP_BOOL_ALIGN16 && T_Align16) ? (T*)(((byte *)m_array) + (0-(size_t)m_array)%16) : m_array;}
 	CRYPTOPP_ALIGN_DATA(8) T m_array[(CRYPTOPP_BOOL_ALIGN16 && T_Align16) ? S+8/sizeof(T) : S];
 #endif
-
 	A m_fallbackAllocator;
 	bool m_allocated;
 };
@@ -464,7 +453,7 @@ public:
 	//! \throws std::bad_alloc
 	//! \details If <tt>ptr!=NULL</tt> and <tt>len!=0</tt>, then the block is initialized from the pointer ptr. 
 	//!    If <tt>ptr==NULL</tt> and <tt>len!=0</tt>, then the block is initialized to 0.
-	//!    Otherwise, the block is empty and \a not initialized.
+	//!    Otherwise, the block is empty and uninitialized.
 	//! \note size is the count of elements, and not the number of bytes
 	SecBlock(const T *ptr, size_type len)
 		: m_size(len), m_ptr(m_alloc.allocate(len, NULL)) {
@@ -539,7 +528,7 @@ public:
 	//! \brief Set contents and size from an array
 	//! \param ptr a pointer to an array of T
 	//! \param len the number of elements in the memory block
-	//! \details If the memory block is reduced in size, then the reclaimed memory is set to 0.
+	//! \details If the memory block is reduced in size, then the unused area is set to 0.
 	void Assign(const T *ptr, size_type len)
 	{
 		New(len);
@@ -550,7 +539,7 @@ public:
 	//! \brief Copy contents from another SecBlock
 	//! \param t the other SecBlock
 	//! \details Assign checks for self assignment.
-	//! \details If the memory block is reduced in size, then the reclaimed memory is set to 0.
+	//! \details If the memory block is reduced in size, then the unused area is set to 0.
 	void Assign(const SecBlock<T, A> &t)
 	{
 		if (this != &t)
@@ -564,7 +553,7 @@ public:
 	//! \brief Assign contents from another SecBlock
 	//! \param t the other SecBlock
 	//! \details Internally, operator=() calls Assign().
-	//! \details If the memory block is reduced in size, then the reclaimed memory is set to 0.
+	//! \details If the memory block is reduced in size, then the unused area is set to 0.
 	SecBlock<T, A>& operator=(const SecBlock<T, A> &t)
 	{
 		// Assign guards for self-assignment
@@ -574,41 +563,38 @@ public:
 
 	//! \brief Append contents from another SecBlock
 	//! \param t the other SecBlock
-	//! \details Internally, this SecBlock calls Grow and then appends t.
+	//! \details Internally, this SecBlock calls Grow and then copies the new content.
+	//! \details If the memory block is reduced in size, then the unused area is set to 0.
 	SecBlock<T, A>& operator+=(const SecBlock<T, A> &t)
 	{
-		assert((!t.m_ptr && !t.m_size) || (t.m_ptr && t.m_size));
+		assert((!t.m_ptr && !t.m_size) || (t.m_ptr && t.m_ptr.m_size));
 
-		if(t.m_size)
+		if(t.size)
 		{
-			const size_type oldSize = m_size;
-			if(this != &t)  // s += t
-			{
-				Grow(m_size+t.m_size);
-				memcpy_s(m_ptr+oldSize, (m_size-oldSize)*sizeof(T), t.m_ptr, t.m_size*sizeof(T));
-			}
-			else            // t += t
-			{
-				Grow(m_size*2);
-				memcpy_s(m_ptr+oldSize, (m_size-oldSize)*sizeof(T), m_ptr, oldSize*sizeof(T));
-			}
+			size_type oldSize = m_size;
+			Grow(m_size+t.m_size);
+		
+			if (m_ptr && t.m_ptr)
+				{memcpy_s(m_ptr+oldSize, (m_size-oldSize)*sizeof(T), t.m_ptr, t.m_size*sizeof(T));}
 		}
 		return *this;
 	}
 
-	//! \brief Construct a SecBlock from this and another SecBlock
+	//! \brief Concatenate contents from another SecBlock
 	//! \param t the other SecBlock
 	//! \returns a newly constructed SecBlock that is a conacentation of this and t
-	//! \details Internally, a new SecBlock is created from this and a concatenation of t.
+	//! \details Internally, a temporary SecBlock is created and the content from this
+	//!    SecBlock and the other SecBlock are concatenated. The temporary
+	//!    SecBlock is returned to the caller.
 	SecBlock<T, A> operator+(const SecBlock<T, A> &t)
 	{
 		assert((!m_ptr && !m_size) || (m_ptr && m_size));
-		assert((!t.m_ptr && !t.m_size) || (t.m_ptr && t.m_size));
-		if(!t.m_size) return SecBlock(*this);
+		assert((!t.m_ptr && !t.m_size) || (t.m_ptr && t.m_ptr.m_size));
+		if(!t.size) return SecBlock(*this);
 
 		SecBlock<T, A> result(m_size+t.m_size);
-		if(m_size) {memcpy_s(result.m_ptr, result.m_size*sizeof(T), m_ptr, m_size*sizeof(T));}
-		memcpy_s(result.m_ptr+m_size, (result.m_size-m_size)*sizeof(T), t.m_ptr, t.m_size*sizeof(T));
+		memcpy_s(result.m_ptr, result.m_size*sizeof(T), m_ptr, m_size*sizeof(T));
+		memcpy_s(result.m_ptr+m_size, (t.m_size-m_size)*sizeof(T), t.m_ptr, t.m_size*sizeof(T));
 		return result;
 	}
 
@@ -620,8 +606,7 @@ public:
 	//! \sa operator!=()
 	bool operator==(const SecBlock<T, A> &t) const
 	{
-		return m_size == t.m_size &&
-			VerifyBufsEqual(reinterpret_cast<const byte*>(m_ptr), reinterpret_cast<const byte*>(t.m_ptr), m_size*sizeof(T));
+		return m_size == t.m_size && VerifyBufsEqual(m_ptr, t.m_ptr, m_size*sizeof(T));
 	}
 
 	//! \brief Bitwise compare two SecBlocks
@@ -639,8 +624,8 @@ public:
 	//! \brief Change size without preserving contents
 	//! \param newSize the new size of the memory block
 	//! \details Old content is \a not preserved. If the memory block is reduced in size,
-	//!    then the reclaimed memory is set to 0. If the memory block grows in size, then
-	//!    the new memory is \a not initialized.
+	//!    then the unused content is set to 0. If the memory block grows in size, then
+	//!    all content is uninitialized.
 	//! \details Internally, this SecBlock calls reallocate().
 	//! \sa New(), CleanNew(), Grow(), CleanGrow(), resize()
 	void New(size_type newSize)
@@ -651,10 +636,9 @@ public:
 
 	//! \brief Change size without preserving contents
 	//! \param newSize the new size of the memory block
-	//! \details Old content is \a not preserved. If the memory block is reduced in size,
-	//!    then the reclaimed content is set to 0. If the memory block grows in size, then
-	//!    the new memory is initialized to 0.
-	//! \details Internally, this SecBlock calls New().
+	//! \details Old content is not preserved. If the memory block is reduced in size,
+	//!    then the unused content is set to 0. Existing and new content is set to 0.
+	//! \details Internally, this SecBlock calls reallocate().
 	//! \sa New(), CleanNew(), Grow(), CleanGrow(), resize()
 	void CleanNew(size_type newSize)
 	{
@@ -664,10 +648,12 @@ public:
 
 	//! \brief Change size and preserve contents
 	//! \param newSize the new size of the memory block
-	//! \details Old content is preserved. New content is not initialized.
-	//! \details Internally, this SecBlock calls reallocate() when size must increase. If the
-	//!    size does not increase, then Grow() does not take action. If the size must
-	//!    change, then use resize().
+	//! \details Old content is preserved. If the memory block grows in size, then
+	//!    all content is uninitialized.
+	//! \details Internally, this SecBlock calls reallocate().
+	//! \note reallocate() is called if the size increases. If the size does not 
+	//!    increase, then Grow does not take action. If the size must change,
+	//!    then use resize().
 	//! \sa New(), CleanNew(), Grow(), CleanGrow(), resize()
 	void Grow(size_type newSize)
 	{
@@ -680,10 +666,13 @@ public:
 
 	//! \brief Change size and preserve contents
 	//! \param newSize the new size of the memory block
-	//! \details Old content is preserved. New content is initialized to 0.
-	//! \details Internally, this SecBlock calls reallocate() when size must increase. If the
-	//!    size does not increase, then CleanGrow() does not take action. If the size must
-	//!    change, then use resize().
+	//! \details Old content is preserved. If the memory block is reduced in size,
+	//!    then the unused content is set to 0. If the memory block grows in size,
+	//!    then the new content is uninitialized.
+	//! \details Internally, this SecBlock calls reallocate().
+	//! \note reallocate() is called if the size increases. If the size does not 
+	//!    increase, then Grow does not take action. If the size must change,
+	//!    then use resize().
 	//! \sa New(), CleanNew(), Grow(), CleanGrow(), resize()
 	void CleanGrow(size_type newSize)
 	{
@@ -698,8 +687,11 @@ public:
 	//! \brief Change size and preserve contents
 	//! \param newSize the new size of the memory block
 	//! \details Old content is preserved. If the memory block grows in size, then
-	//!    new memory is \a not initialized.
+	//!    all content is uninitialized.
 	//! \details Internally, this SecBlock calls reallocate().
+	//! \note reallocate() is called if the size increases. If the size does not 
+	//!    increase, then Grow does not take action. If the size must change,
+	//!    then use resize().
 	//! \sa New(), CleanNew(), Grow(), CleanGrow(), resize()
 	void resize(size_type newSize)
 	{
@@ -726,14 +718,14 @@ public:
 
 #ifdef CRYPTOPP_DOXYGEN_PROCESSING
 //! \class SecByteBlock
-//! \brief \ref SecBlock "SecBlock<byte>" typedef.
+//! \brief SecByteBlock is a SecBlock<byte> typedef.
 class SecByteBlock : public SecBlock<byte> {};
 //! \class SecWordBlock
-//! \brief \ref SecBlock "SecBlock<word>" typedef.
+//! \brief SecWordBlock is a SecBlock<word> typedef.
 class SecWordBlock : public SecBlock<word> {};
 //! \class AlignedSecByteBlock
-//! \brief SecBlock using \ref AllocatorWithCleanup "AllocatorWithCleanup<byte, true>" typedef
-class AlignedSecByteBlock : public SecBlock<byte, AllocatorWithCleanup<byte, true> > {};
+//! \brief AlignedSecByteBlock is a SecBlock<byte, AllocatorWithCleanup<byte, true> > typedef.
+class AlignedSecByteBlock SecBlock<byte, AllocatorWithCleanup<byte, true> > {};
 #else
 typedef SecBlock<byte> SecByteBlock;
 typedef SecBlock<word> SecWordBlock;

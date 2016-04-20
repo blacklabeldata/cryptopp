@@ -234,10 +234,6 @@ SOURCE=.\blowfish.cpp
 # End Source File
 # Begin Source File
 
-SOURCE=.\blake2.cpp
-# End Source File
-# Begin Source File
-
 SOURCE=.\blumshub.cpp
 # End Source File
 # Begin Source File
@@ -730,10 +726,6 @@ SOURCE=.\base64.h
 # Begin Source File
 
 SOURCE=.\basecode.h
-# End Source File
-# Begin Source File
-
-SOURCE=.\blake2.h
 # End Source File
 # Begin Source File
 

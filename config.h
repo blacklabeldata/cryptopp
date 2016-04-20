@@ -9,7 +9,7 @@
 // ***************** Important Settings ********************
 
 // define this if running on a big-endian CPU
-#if !defined(IS_LITTLE_ENDIAN) && (defined(__BIG_ENDIAN__) || (defined(__s390__) || defined(__s390x__) || defined(__zarch__)) || (defined(__m68k__) || defined(__MC68K__)) || defined(__sparc) || defined(__sparc__) || defined(__hppa__) || defined(__MIPSEB__) || defined(__ARMEB__) || (defined(__MWERKS__) && !defined(__INTEL__)))
+#if !defined(IS_LITTLE_ENDIAN) && (defined(__BIG_ENDIAN__) || (defined(__s390__) || defined(__s390x__) || defined(__zarch__)) || defined(__sparc) || defined(__sparc__) || defined(__hppa__) || defined(__MIPSEB__) || defined(__ARMEB__) || (defined(__MWERKS__) && !defined(__INTEL__)))
 #	define IS_BIG_ENDIAN
 #endif
 
@@ -28,7 +28,7 @@
 # error "IS_LITTLE_ENDIAN is set, but __BYTE_ORDER__  does not equal __ORDER_LITTLE_ENDIAN__"
 #endif
 
-// Define this if you want to disable all OS-dependent features,
+// define this if you want to disable all OS-dependent features,
 // such as sockets and OS-provided random number generators
 // #define NO_OS_DEPENDENCE
 
@@ -48,17 +48,10 @@
 // Library version
 #define CRYPTOPP_VERSION 563
 
-// Define this if you want to set a prefix for TestData/ and TestVectors/
-//   Be mindful of the trailing slash since its simple concatenation.
-//   g++ ... -DCRYPTOPP_DATA_DIR='"/tmp/cryptopp_test/share/"'
-#ifndef CRYPTOPP_DATA_DIR
-# define CRYPTOPP_DATA_DIR ""
-#endif
-
 // define this to retain (as much as possible) old deprecated function and class names
 // #define CRYPTOPP_MAINTAIN_BACKWARDS_COMPATIBILITY
 
-// Define this to retain (as much as possible) ABI and binary compatibility with Crypto++ 5.6.2.
+// define this to retain (as much as possible) ABI and binary compatibility with Crypto++ 5.6.2.
 // Also see https://cryptopp.com/wiki/Config.h#Avoid_MAINTAIN_BACKWARDS_COMPATIBILITY
 #if (CRYPTOPP_VERSION <= 600)
 # if !defined(CRYPTOPP_NO_BACKWARDS_COMPATIBILITY_562) && !defined(CRYPTOPP_MAINTAIN_BACKWARDS_COMPATIBILITY_562)
@@ -85,14 +78,6 @@
 // the original constants as specified in S.K. Park and K.W. Miller's
 // CACM paper.
 // #define LCRNG_ORIGINAL_NUMBERS
-
-// Define this if you want Integer's operator<< to honor std::showbase (and
-// std::noshowbase). If defined, Integer will use a suffix of 'b', 'o', 'h'
-// or '.' (the last for decimal) when std::showbase is in effect. If
-// std::noshowbase is set, then the suffix is not added to the Integer. If
-// not defined, existing behavior is preserved and Integer will use a suffix
-// of 'b', 'o', 'h' or '.' (the last for decimal).
-// #define CRYPTOPP_USE_STD_SHOWBASE
 
 // choose which style of sockets to wrap (mostly useful for MinGW which has both)
 #if !defined(NO_BERKELEY_STYLE_SOCKETS) && !defined(PREFER_BERKELEY_STYLE_SOCKETS)
@@ -230,26 +215,40 @@ const lword LWORD_MAX = W64LIT(0xffffffffffffffff);
 
 // define hword, word, and dword. these are used for multiprecision integer arithmetic
 // Intel compiler won't have _umul128 until version 10.0. See http://softwarecommunity.intel.com/isn/Community/en-US/forums/thread/30231625.aspx
-#if (defined(_MSC_VER) && (!defined(__INTEL_COMPILER) || __INTEL_COMPILER >= 1000) && (defined(_M_X64) || defined(_M_IA64))) || (defined(__DECCXX) && defined(__alpha__)) || (defined(__INTEL_COMPILER) && defined(__x86_64__)) || (defined(__SUNPRO_CC) && defined(__x86_64__))
+#if (defined(_MSC_VER) && (!defined(__INTEL_COMPILER) || __INTEL_COMPILER >= 1000) && (defined(_M_X64) || defined(_M_IA64))) || (defined(__DECCXX) && defined(__alpha__)) || (defined(__INTEL_COMPILER) && (__INTEL_COMPILER < 1000) && defined(__x86_64__)) || (defined(__SUNPRO_CC) && defined(__x86_64__))
 	typedef word32 hword;
 	typedef word64 word;
 #else
 	#define CRYPTOPP_NATIVE_DWORD_AVAILABLE
 	#if defined(__alpha__) || defined(__ia64__) || defined(_ARCH_PPC64) || defined(__x86_64__) || defined(__mips64) || defined(__sparc64__)
-		#if defined(__GNUC__) && !defined(__INTEL_COMPILER) && !(CRYPTOPP_GCC_VERSION == 40001 && defined(__APPLE__)) && CRYPTOPP_GCC_VERSION >= 30400
+		#if defined(__GNUC__) && !defined(__INTEL_COMPILER) && !(CRYPTOPP_GCC_VERSION == 40001 && defined(__APPLE__)) && (CRYPTOPP_GCC_VERSION >= 30400)
 			// GCC 4.0.1 on MacOS X is missing __umodti3 and __udivti3
 			// mode(TI) division broken on amd64 with GCC earlier than GCC 3.4
+			#define CRYPTOPP_WORD128_AVAILABLE
 			typedef word32 hword;
 			typedef word64 word;
 			typedef __uint128_t dword;
 			typedef __uint128_t word128;
+		#elif defined(__GNUC__) && (__SIZEOF_INT128__ >= 16)
+			// Detect availabliltiy of int128_t and uint128_t in preprocessor, http://gcc.gnu.org/ml/gcc-help/2015-08/msg00185.html.
 			#define CRYPTOPP_WORD128_AVAILABLE
+			typedef word32 hword;
+			typedef word64 word;
+			typedef __uint128_t dword;
+			typedef __uint128_t word128;	
 		#else
 			// if we're here, it means we're on a 64-bit CPU but we don't have a way to obtain 128-bit multiplication results
 			typedef word16 hword;
 			typedef word32 word;
 			typedef word64 dword;
 		#endif
+	#elif defined(__GNUC__) && (__SIZEOF_INT128__ >= 16)
+		// Detect availabliltiy of int128_t and uint128_t in preprocessor, http://gcc.gnu.org/ml/gcc-help/2015-08/msg00185.html.
+		#define CRYPTOPP_WORD128_AVAILABLE
+		typedef word32 hword;
+		typedef word64 word;
+		typedef __uint128_t dword;
+		typedef __uint128_t word128;	
 	#else
 		// being here means the native register size is probably 32 bits or less
 		#define CRYPTOPP_BOOL_SLOW_WORD64 1
@@ -260,6 +259,11 @@ const lword LWORD_MAX = W64LIT(0xffffffffffffffff);
 #endif
 #ifndef CRYPTOPP_BOOL_SLOW_WORD64
 	#define CRYPTOPP_BOOL_SLOW_WORD64 0
+#endif
+
+// Produce a compiler error. It can be commented out, but you may not get the benefit of the fastest integers.
+#if (__SIZEOF_INT128__ >= 16) && !defined(CRYPTOPP_WORD128_AVAILABLE) && !defined(__aarch64__)
+# error "An int128_t and uint128_t are available, but CRYPTOPP_WORD128_AVAILABLE is not defined"
 #endif
 
 const unsigned int WORD_SIZE = sizeof(word);
@@ -364,7 +368,7 @@ NAMESPACE_END
 # pragma GCC diagnostic ignored "-Wunused-function"
 #endif
 
-#if (defined(_MSC_VER) && _MSC_VER <= 1300) || defined(__MWERKS__) || (defined(_STLPORT_VERSION) && ((_STLPORT_VERSION < 0x450) || defined(_STLP_NO_UNCAUGHT_EXCEPT_SUPPORT)))
+#if (defined(_MSC_VER) && _MSC_VER <= 1300) || defined(__MWERKS__) || defined(_STLPORT_VERSION)
 #define CRYPTOPP_DISABLE_UNCAUGHT_EXCEPTION
 #endif
 
@@ -410,18 +414,10 @@ NAMESPACE_END
 	#define CRYPTOPP_X64_ASM_AVAILABLE
 #endif
 
-#if !defined(CRYPTOPP_DISABLE_SSE2) && (defined(CRYPTOPP_MSVC6PP_OR_LATER) || defined(__SSE2__)) && !defined(_M_ARM)
+#if !defined(CRYPTOPP_DISABLE_SSE2) && (defined(CRYPTOPP_MSVC6PP_OR_LATER) || defined(__SSE2__))
 	#define CRYPTOPP_BOOL_SSE2_INTRINSICS_AVAILABLE 1
 #else
 	#define CRYPTOPP_BOOL_SSE2_INTRINSICS_AVAILABLE 0
-#endif
-
-// Intrinsics availible in GCC 4.3 (http://gcc.gnu.org/gcc-4.3/changes.html) and
-//   MSVC 2008 (http://msdn.microsoft.com/en-us/library/bb892950%28v=vs.90%29.aspx)
-#if !defined(CRYPTOPP_DISABLE_SSE4) && ((_MSC_VER >= 1500) || defined(__SSE4_1__) || defined(__SSE4_2__))
-	#define CRYPTOPP_BOOL_SSE4_INTRINSICS_AVAILABLE 1
-#else
-	#define CRYPTOPP_BOOL_SSE4_INTRINSICS_AVAILABLE 0
 #endif
 
 #if !defined(CRYPTOPP_DISABLE_SSSE3) && !defined(CRYPTOPP_DISABLE_AESNI) && CRYPTOPP_BOOL_SSE2_INTRINSICS_AVAILABLE && (CRYPTOPP_GCC_VERSION >= 40400 || _MSC_FULL_VER >= 150030729 || __INTEL_COMPILER >= 1110 || defined(__AES__))
@@ -465,16 +461,15 @@ NAMESPACE_END
 #endif
 
 // how to declare class constants
-#if (defined(_MSC_VER) && _MSC_VER <= 1300) || defined(__INTEL_COMPILER) || defined(__BORLANDC__)
+#if (defined(_MSC_VER) && _MSC_VER <= 1300) || defined(__INTEL_COMPILER)
 #	define CRYPTOPP_CONSTANT(x) enum {x};
 #else
 #	define CRYPTOPP_CONSTANT(x) static const int x;
 #endif
-
+	
 // Linux provides X32, which is 32-bit integers, longs and pointers on x86_64 using the full x86_64 register set.
-// Detect via __ILP32__ (http://wiki.debian.org/X32Port). However, __ILP32__ shows up in more places than
-// the System V ABI specs calls out, like on just about any 32-bit system with Clang.
-#if ((__ILP32__ >= 1) || (_ILP32 >= 1)) && defined(__x86_64__)
+// Detect via __ILP32__ (http://wiki.debian.org/X32Port). Both GCC and Clang provide the preprocessor macro.
+#if ((__ILP32__ >= 1) || (_ILP32 >= 1))
 	#define CRYPTOPP_BOOL_X32 1
 #else
 	#define CRYPTOPP_BOOL_X32 0

@@ -68,7 +68,7 @@ being unloaded from L1 cache, until that round is finished.
 #include "config.h"
 
 #ifndef CRYPTOPP_IMPORTS
-#ifndef CRYPTOPP_GENERATE_X64_MASM
+#ifndef CRYPTOPP_GENERATE_X64_MASMrij
 
 #include "rijndael.h"
 #include "stdcpp.h"		// alloca
@@ -76,8 +76,8 @@ being unloaded from L1 cache, until that round is finished.
 #include "cpu.h"
 
 NAMESPACE_BEGIN(CryptoPP)
-
-// Hack for https://github.com/weidai11/cryptopp/issues/42 and https://github.com/weidai11/cryptopp/issues/132
+	
+// Hack for https://github.com/weidai11/cryptopp/issues/42
 #if (CRYPTOPP_BOOL_SSE2_ASM_AVAILABLE || defined(CRYPTOPP_X64_MASM_AVAILABLE)) && !defined(CRYPTOPP_ALLOW_UNALIGNED_DATA_ACCESS)
 # define CRYPTOPP_ALLOW_RIJNDAEL_UNALIGNED_DATA_ACCESS 1
 #endif
@@ -90,15 +90,9 @@ using namespace rdtable;
 static word64 Te[256];
 # endif
 static word64 Td[256];
-#else // Not CRYPTOPP_ALLOW_UNALIGNED_DATA_ACCESS
-# if defined(CRYPTOPP_X64_MASM_AVAILABLE)
-// Unused; avoids linker error on Microsoft X64 non-AESNI platforms
-namespace rdtable {CRYPTOPP_ALIGN_DATA(16) word64 Te[256+2];}
-# endif
-static CRYPTOPP_ALIGN_DATA(16) word32 Te[256*4];
-static CRYPTOPP_ALIGN_DATA(16) word32 Td[256*4];
-#endif // CRYPTOPP_ALLOW_UNALIGNED_DATA_ACCESS
-
+#else
+static word32 Te[256*4], Td[256*4];
+#endif
 static volatile bool s_TeFilled = false, s_TdFilled = false;
 
 // ************************* Portable Code ************************************
@@ -136,8 +130,8 @@ static volatile bool s_TeFilled = false, s_TdFilled = false;
 	#define QUARTER_ROUND_FE(t, a, b, c, d)		QUARTER_ROUND(TL_F, Te, t, d, c, b, a)
 	#define QUARTER_ROUND_FD(t, a, b, c, d)		QUARTER_ROUND(TL_F, Td, t, d, c, b, a)
 	#if defined(CRYPTOPP_ALLOW_UNALIGNED_DATA_ACCESS) || defined(CRYPTOPP_ALLOW_RIJNDAEL_UNALIGNED_DATA_ACCESS)
-		#define TL_F(T, i, x)	(*(word32 *)(void *)((byte *)T + x*8 + (6-i)%4+1))
-		#define TL_M(T, i, x)	(*(word32 *)(void *)((byte *)T + x*8 + (i+3)%4+1))
+		#define TL_F(T, i, x)	(*(word32 *)((byte *)T + x*8 + (6-i)%4+1))
+		#define TL_M(T, i, x)	(*(word32 *)((byte *)T + x*8 + (i+3)%4+1))
 	#else
 		#define TL_F(T, i, x)	rotrFixed(T[x], (3-i)*8)
 		#define TL_M(T, i, x)	T[i*256 + x]
@@ -146,7 +140,7 @@ static volatile bool s_TeFilled = false, s_TdFilled = false;
 	#define QUARTER_ROUND_FE(t, a, b, c, d)		QUARTER_ROUND(TL_F, Te, t, a, b, c, d)
 	#define QUARTER_ROUND_FD(t, a, b, c, d)		QUARTER_ROUND(TL_F, Td, t, a, b, c, d)
 	#if defined(CRYPTOPP_ALLOW_UNALIGNED_DATA_ACCESS) || defined(CRYPTOPP_ALLOW_RIJNDAEL_UNALIGNED_DATA_ACCESS)
-		#define TL_F(T, i, x)	(*(word32 *)(void *)((byte *)T + x*8 + (4-i)%4))
+		#define TL_F(T, i, x)	(*(word32 *)((byte *)T + x*8 + (4-i)%4))
 		#define TL_M			TL_F
 	#else
 		#define TL_F(T, i, x)	rotrFixed(T[x], i*8)
@@ -228,7 +222,7 @@ void Rijndael::Base::UncheckedSetKey(const byte *userKey, unsigned int keylen, c
 		};
 		const word32 *rc = rcLE;
 
-		__m128i temp = _mm_loadu_si128((__m128i *)(void *)(userKey+keylen-16));
+		__m128i temp = _mm_loadu_si128((__m128i *)(userKey+keylen-16));
 		memcpy(rk, userKey, keylen);
 
 		while (true)
@@ -267,16 +261,16 @@ void Rijndael::Base::UncheckedSetKey(const byte *userKey, unsigned int keylen, c
 			rk = m_key;
 			unsigned int i, j;
 
-			std::swap(*(__m128i *)(void *)(rk), *(__m128i *)(void *)(rk+4*m_rounds));
+			std::swap(*(__m128i *)(rk), *(__m128i *)(rk+4*m_rounds));
 
 			for (i = 4, j = 4*m_rounds-4; i < j; i += 4, j -= 4)
 			{
-				temp = _mm_aesimc_si128(*(__m128i *)(void *)(rk+i));
-				*(__m128i *)(void *)(rk+i) = _mm_aesimc_si128(*(__m128i *)(void *)(rk+j));
-				*(__m128i *)(void *)(rk+j) = temp;
+				temp = _mm_aesimc_si128(*(__m128i *)(rk+i));
+				*(__m128i *)(rk+i) = _mm_aesimc_si128(*(__m128i *)(rk+j));
+				*(__m128i *)(rk+j) = temp;
 			}
 
-			*(__m128i *)(void *)(rk+i) = _mm_aesimc_si128(*(__m128i *)(void *)(rk+i));
+			*(__m128i *)(rk+i) = _mm_aesimc_si128(*(__m128i *)(rk+i));
 		}
 
 		return;
@@ -388,18 +382,16 @@ void Rijndael::Enc::ProcessAndXorBlock(const byte *inBlock, const byte *xorBlock
 	t3 = rk[7];
 	rk += 8;
 
-	// timing attack countermeasure. see comments at top for more details.
-	// also see http://github.com/weidai11/cryptopp/issues/146
+	// timing attack countermeasure. see comments at top for more details
 	const int cacheLineSize = GetCacheLineSize();
 	unsigned int i;
-	volatile word32 _u = 0;
-	word32 u = _u;
+	word32 u = 0;
 #if defined(CRYPTOPP_ALLOW_UNALIGNED_DATA_ACCESS) || defined(CRYPTOPP_ALLOW_RIJNDAEL_UNALIGNED_DATA_ACCESS)
 	for (i=0; i<2048; i+=cacheLineSize)
 #else
 	for (i=0; i<1024; i+=cacheLineSize)
 #endif
-		u &= *(const word32 *)(const void *)(((const byte *)Te)+i);
+		u &= *(const word32 *)(((const byte *)Te)+i);
 	u &= Te[255];
 	s0 |= u; s1 |= u; s2 |= u; s3 |= u;
 
@@ -466,18 +458,16 @@ void Rijndael::Dec::ProcessAndXorBlock(const byte *inBlock, const byte *xorBlock
 	t3 = rk[7];
 	rk += 8;
 
-	// timing attack countermeasure. see comments at top for more details.
-	// also see http://github.com/weidai11/cryptopp/issues/146
+	// timing attack countermeasure. see comments at top for more details
 	const int cacheLineSize = GetCacheLineSize();
 	unsigned int i;
-	volatile word32 _u = 0;
-	word32 u = _u;
+	word32 u = 0;
 #if defined(CRYPTOPP_ALLOW_UNALIGNED_DATA_ACCESS) || defined(CRYPTOPP_ALLOW_RIJNDAEL_UNALIGNED_DATA_ACCESS)
 	for (i=0; i<2048; i+=cacheLineSize)
 #else
 	for (i=0; i<1024; i+=cacheLineSize)
 #endif
-		u &= *(const word32 *)(const void *)(((const byte *)Td)+i);
+		u &= *(const word32 *)(((const byte *)Td)+i);
 	u &= Td[255];
 	s0 |= u; s1 |= u; s2 |= u; s3 |= u;
 
@@ -511,10 +501,10 @@ void Rijndael::Dec::ProcessAndXorBlock(const byte *inBlock, const byte *xorBlock
 	// timing attack countermeasure. see comments at top for more details
 	// If CRYPTOPP_ALLOW_UNALIGNED_DATA_ACCESS is defined, 
 	// QUARTER_ROUND_LD will use Td, which is already preloaded.
-	u = _u;
+	u = 0;
 	for (i=0; i<256; i+=cacheLineSize)
-		u &= *(const word32 *)(const void *)(Sd+i);
-	u &= *(const word32 *)(const void *)(Sd+252);
+		u &= *(const word32 *)(Sd+i);
+	u &= *(const word32 *)(Sd+252);
 	t0 |= u; t1 |= u; t2 |= u; t3 |= u;
 #endif
 
@@ -661,9 +651,7 @@ CRYPTOPP_NAKED void CRYPTOPP_FASTCALL Rijndael_Enc_AdvancedProcessBlocks(void *l
 	AS2(	movdqa	XMMWORD_PTR [L_SUBKEYS+WORD_REG(si)], xmm0)
 	AS2(	add		WORD_REG(si), 16)
 	AS2(	cmp		WORD_REG(si), 16*12)
-	ATT_NOPREFIX
 	ASJ(	jl,		0, b)
-	INTEL_NOPREFIX
 
 	// read subkeys 0, 1 and last
 	AS2(	movdqa	xmm4, [WORD_REG(ax)+WORD_REG(si)])	// last subkey
@@ -685,15 +673,11 @@ CRYPTOPP_NAKED void CRYPTOPP_FASTCALL Rijndael_Enc_AdvancedProcessBlocks(void *l
 	AS2(	mov		esi, [AS_REG_7+WORD_REG(ax)])
 	AS2(	add		WORD_REG(ax), WORD_REG(di))
 	AS2(	cmp		WORD_REG(ax), 2048)
-	ATT_NOPREFIX
 	ASJ(	jl,		9, b)
-	INTEL_NOPREFIX
 	AS1(	lfence)
 
 	AS2(	test	DWORD PTR [L_LENGTH], 1)
-	ATT_NOPREFIX
 	ASJ(	jz,		8, f)
-	INTEL_NOPREFIX
 
 	// counter mode one-time setup
 	AS2(	mov		WORD_REG(si), [L_INBLOCKS])
@@ -767,9 +751,8 @@ CRYPTOPP_NAKED void CRYPTOPP_FASTCALL Rijndael_Enc_AdvancedProcessBlocks(void *l
 	AS2(	mov		[L_SAVED_X+0*4], eax)
 	AS2(	mov		[L_SAVED_X+1*4], ebx)
 	AS2(	mov		[L_SAVED_X+2*4], edi)
-	ATT_NOPREFIX
 	ASJ(	jmp,	5, f)
-	INTEL_NOPREFIX
+
 	ASL(3)
 	// non-counter mode per-block setup
 	AS2(	MOVD	MM(1), [L_KEY12+0*4])	// 0,1,2,3
@@ -819,9 +802,8 @@ CRYPTOPP_NAKED void CRYPTOPP_FASTCALL Rijndael_Enc_AdvancedProcessBlocks(void *l
 
 	AS2(	add		L_REG, [L_KEYS_BEGIN])
 	AS2(	add		L_REG, 4*16)
-	ATT_NOPREFIX
 	ASJ(	jmp,	2, f)
-	INTEL_NOPREFIX
+
 	ASL(1)
 	// counter-mode per-block setup
 	AS2(	MOVD	ecx, MM(2))
@@ -848,9 +830,7 @@ CRYPTOPP_NAKED void CRYPTOPP_FASTCALL Rijndael_Enc_AdvancedProcessBlocks(void *l
 
 	AS2(	add		L_REG, [L_KEYS_BEGIN])
 	AS2(	add		L_REG, 3*16)
-	ATT_NOPREFIX
 	ASJ(	jmp,	4, f)
-	INTEL_NOPREFIX
 
 // in: eax(0,1,2,3), ebx(4,5,6,7), ecx(8,9,10,11), edx(12,13,14,15)
 // out: eax, ebx, edi, mm0
@@ -897,9 +877,7 @@ CRYPTOPP_NAKED void CRYPTOPP_FASTCALL Rijndael_Enc_AdvancedProcessBlocks(void *l
 
 	AS2(	add		L_REG, 32)
 	AS2(	test	L_REG, 255)
-	ATT_NOPREFIX
 	ASJ(	jnz,	2, b)
-	INTEL_NOPREFIX
 	AS2(	sub		L_REG, 16*16)
 
 #define LAST(a, b, c)												\
@@ -945,22 +923,16 @@ CRYPTOPP_NAKED void CRYPTOPP_FASTCALL Rijndael_Enc_AdvancedProcessBlocks(void *l
 	AS2(	pxor	xmm2, [L_LASTROUND])
 	AS2(	movdqu	[WORD_REG(bx)], xmm2)
 
-	ATT_NOPREFIX
 	ASJ(	jle,	7, f)
-	INTEL_NOPREFIX
 	AS2(	mov		[L_LENGTH], WORD_REG(cx))
 	AS2(	test	WORD_REG(cx), 1)
-	ATT_NOPREFIX
 	ASJ(	jnz,	1, b)
-	INTEL_NOPREFIX
 #if CRYPTOPP_BOOL_X64
 	AS2(	movdqa	xmm0, [L_INCREMENTS])
 	AS2(	paddq	xmm0, [L_INBLOCKS])
 	AS2(	movdqa	[L_INBLOCKS], xmm0)
 #endif
-	ATT_NOPREFIX
 	ASJ(	jmp,	3, b)
-	INTEL_NOPREFIX
 
 	ASL(7)
 	// erase keys on stack
@@ -1128,35 +1100,35 @@ inline size_t AESNI_AdvancedProcessBlocks(F1 func1, F4 func4, const __m128i *sub
 	{
 		while (length >= 4*blockSize)
 		{
-			__m128i block0 = _mm_loadu_si128((const __m128i *)(const void *)inBlocks), block1, block2, block3;
+			__m128i block0 = _mm_loadu_si128((const __m128i *)inBlocks), block1, block2, block3;
 			if (flags & BlockTransformation::BT_InBlockIsCounter)
 			{
-				const __m128i be1 = *(const __m128i *)(const void *)s_one;
+				const __m128i be1 = *(const __m128i *)s_one;
 				block1 = _mm_add_epi32(block0, be1);
 				block2 = _mm_add_epi32(block1, be1);
 				block3 = _mm_add_epi32(block2, be1);
-				_mm_storeu_si128((__m128i *)(void *)inBlocks, _mm_add_epi32(block3, be1));
+				_mm_storeu_si128((__m128i *)inBlocks, _mm_add_epi32(block3, be1));
 			}
 			else
 			{
 				inBlocks += inIncrement;
-				block1 = _mm_loadu_si128((const __m128i *)(const void *)inBlocks);
+				block1 = _mm_loadu_si128((const __m128i *)inBlocks);
 				inBlocks += inIncrement;
-				block2 = _mm_loadu_si128((const __m128i *)(const void *)inBlocks);
+				block2 = _mm_loadu_si128((const __m128i *)inBlocks);
 				inBlocks += inIncrement;
-				block3 = _mm_loadu_si128((const __m128i *)(const void *)inBlocks);
+				block3 = _mm_loadu_si128((const __m128i *)inBlocks);
 				inBlocks += inIncrement;
 			}
 
 			if (flags & BlockTransformation::BT_XorInput)
 			{
-				block0 = _mm_xor_si128(block0, _mm_loadu_si128((const __m128i *)(const void *)xorBlocks));
+				block0 = _mm_xor_si128(block0, _mm_loadu_si128((const __m128i *)xorBlocks));
 				xorBlocks += xorIncrement;
-				block1 = _mm_xor_si128(block1, _mm_loadu_si128((const __m128i *)(const void *)xorBlocks));
+				block1 = _mm_xor_si128(block1, _mm_loadu_si128((const __m128i *)xorBlocks));
 				xorBlocks += xorIncrement;
-				block2 = _mm_xor_si128(block2, _mm_loadu_si128((const __m128i *)(const void *)xorBlocks));
+				block2 = _mm_xor_si128(block2, _mm_loadu_si128((const __m128i *)xorBlocks));
 				xorBlocks += xorIncrement;
-				block3 = _mm_xor_si128(block3, _mm_loadu_si128((const __m128i *)(const void *)xorBlocks));
+				block3 = _mm_xor_si128(block3, _mm_loadu_si128((const __m128i *)xorBlocks));
 				xorBlocks += xorIncrement;
 			}
 
@@ -1164,23 +1136,23 @@ inline size_t AESNI_AdvancedProcessBlocks(F1 func1, F4 func4, const __m128i *sub
 
 			if (xorBlocks && !(flags & BlockTransformation::BT_XorInput))
 			{
-				block0 = _mm_xor_si128(block0, _mm_loadu_si128((const __m128i *)(const void *)xorBlocks));
+				block0 = _mm_xor_si128(block0, _mm_loadu_si128((const __m128i *)xorBlocks));
 				xorBlocks += xorIncrement;
-				block1 = _mm_xor_si128(block1, _mm_loadu_si128((const __m128i *)(const void *)xorBlocks));
+				block1 = _mm_xor_si128(block1, _mm_loadu_si128((const __m128i *)xorBlocks));
 				xorBlocks += xorIncrement;
-				block2 = _mm_xor_si128(block2, _mm_loadu_si128((const __m128i *)(const void *)xorBlocks));
+				block2 = _mm_xor_si128(block2, _mm_loadu_si128((const __m128i *)xorBlocks));
 				xorBlocks += xorIncrement;
-				block3 = _mm_xor_si128(block3, _mm_loadu_si128((const __m128i *)(const void *)xorBlocks));
+				block3 = _mm_xor_si128(block3, _mm_loadu_si128((const __m128i *)xorBlocks));
 				xorBlocks += xorIncrement;
 			}
 
-			_mm_storeu_si128((__m128i *)(void *)outBlocks, block0);
+			_mm_storeu_si128((__m128i *)outBlocks, block0);
 			outBlocks += outIncrement;
-			_mm_storeu_si128((__m128i *)(void *)outBlocks, block1);
+			_mm_storeu_si128((__m128i *)outBlocks, block1);
 			outBlocks += outIncrement;
-			_mm_storeu_si128((__m128i *)(void *)outBlocks, block2);
+			_mm_storeu_si128((__m128i *)outBlocks, block2);
 			outBlocks += outIncrement;
-			_mm_storeu_si128((__m128i *)(void *)outBlocks, block3);
+			_mm_storeu_si128((__m128i *)outBlocks, block3);
 			outBlocks += outIncrement;
 
 			length -= 4*blockSize;
@@ -1189,10 +1161,10 @@ inline size_t AESNI_AdvancedProcessBlocks(F1 func1, F4 func4, const __m128i *sub
 
 	while (length >= blockSize)
 	{
-		__m128i block = _mm_loadu_si128((const __m128i *)(const void *)inBlocks);
+		__m128i block = _mm_loadu_si128((const __m128i *)inBlocks);
 
 		if (flags & BlockTransformation::BT_XorInput)
-			block = _mm_xor_si128(block, _mm_loadu_si128((const __m128i *)(const void *)xorBlocks));
+			block = _mm_xor_si128(block, _mm_loadu_si128((const __m128i *)xorBlocks));
 
 		if (flags & BlockTransformation::BT_InBlockIsCounter)
 			const_cast<byte *>(inBlocks)[15]++;
@@ -1200,9 +1172,9 @@ inline size_t AESNI_AdvancedProcessBlocks(F1 func1, F4 func4, const __m128i *sub
 		func1(block, subkeys, rounds);
 
 		if (xorBlocks && !(flags & BlockTransformation::BT_XorInput))
-			block = _mm_xor_si128(block, _mm_loadu_si128((const __m128i *)(const void *)xorBlocks));
+			block = _mm_xor_si128(block, _mm_loadu_si128((const __m128i *)xorBlocks));
 			
-		_mm_storeu_si128((__m128i *)(void *)outBlocks, block);
+		_mm_storeu_si128((__m128i *)outBlocks, block);
 
 		inBlocks += inIncrement;
 		outBlocks += outIncrement;
@@ -1218,7 +1190,7 @@ size_t Rijndael::Enc::AdvancedProcessBlocks(const byte *inBlocks, const byte *xo
 {
 #if CRYPTOPP_BOOL_AESNI_INTRINSICS_AVAILABLE
 	if (HasAESNI())
-		return AESNI_AdvancedProcessBlocks(AESNI_Enc_Block, AESNI_Enc_4_Blocks, (const __m128i *)(const void *)m_key.begin(), m_rounds, inBlocks, xorBlocks, outBlocks, length, flags);
+		return AESNI_AdvancedProcessBlocks(AESNI_Enc_Block, AESNI_Enc_4_Blocks, (const __m128i *)m_key.begin(), m_rounds, inBlocks, xorBlocks, outBlocks, length, flags);
 #endif
 	
 #if (CRYPTOPP_BOOL_SSE2_ASM_AVAILABLE || defined(CRYPTOPP_X64_MASM_AVAILABLE)) && !defined(CRYPTOPP_DISABLE_RIJNDAEL_ASM)
@@ -1236,12 +1208,13 @@ size_t Rijndael::Enc::AdvancedProcessBlocks(const byte *inBlocks, const byte *xo
 			size_t regSpill, lengthAndCounterFlag, keysBegin;
 		};
 
+		size_t increment = BLOCKSIZE;
 		const byte* zeros = (byte *)(Te+256);
-		byte *space = NULL;
+		byte *space;
 
 		do {
-#if (CRYPTOPP_MSC_VERSION >= 1400)
 			// https://msdn.microsoft.com/en-us/library/5471dc8s.aspx
+#if (CRYPTOPP_MSC_VERION >= 1400)
 			space = (byte *)_malloca(255+sizeof(Locals));
 			space += (256-(size_t)space%256)%256;
 #else
@@ -1251,7 +1224,6 @@ size_t Rijndael::Enc::AdvancedProcessBlocks(const byte *inBlocks, const byte *xo
 		}
 		while (AliasedWithTable(space, space+sizeof(Locals)));
 
-		size_t increment = BLOCKSIZE;
 		if (flags & BT_ReverseDirection)
 		{
 			assert(length % BLOCKSIZE == 0);
@@ -1261,7 +1233,7 @@ size_t Rijndael::Enc::AdvancedProcessBlocks(const byte *inBlocks, const byte *xo
 			increment = 0-increment;
 		}
 
-		Locals &locals = *(Locals *)(void *)space;
+		Locals &locals = *(Locals *)space;
 
 		locals.inBlocks = inBlocks;
 		locals.inXorBlocks = (flags & BT_XorInput) && xorBlocks ? xorBlocks : zeros;
@@ -1278,11 +1250,6 @@ size_t Rijndael::Enc::AdvancedProcessBlocks(const byte *inBlocks, const byte *xo
 		locals.keysBegin = (12-keysToCopy)*16;
 
 		Rijndael_Enc_AdvancedProcessBlocks(&locals, m_key);
-
-#if (CRYPTOPP_MSC_VERSION >= 1400)
-		_freea(space);
-#endif
-
 		return length % BLOCKSIZE;
 	}
 #endif
@@ -1297,7 +1264,7 @@ size_t Rijndael::Enc::AdvancedProcessBlocks(const byte *inBlocks, const byte *xo
 size_t Rijndael::Dec::AdvancedProcessBlocks(const byte *inBlocks, const byte *xorBlocks, byte *outBlocks, size_t length, word32 flags) const
 {
 	if (HasAESNI())
-		return AESNI_AdvancedProcessBlocks(AESNI_Dec_Block, AESNI_Dec_4_Blocks, (const __m128i *)(const void *)m_key.begin(), m_rounds, inBlocks, xorBlocks, outBlocks, length, flags);
+		return AESNI_AdvancedProcessBlocks(AESNI_Dec_Block, AESNI_Dec_4_Blocks, (const __m128i *)m_key.begin(), m_rounds, inBlocks, xorBlocks, outBlocks, length, flags);
 	
 	return BlockTransformation::AdvancedProcessBlocks(inBlocks, xorBlocks, outBlocks, length, flags);
 }

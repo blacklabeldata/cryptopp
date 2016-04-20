@@ -32,7 +32,7 @@
 
 #include <iostream>
 
-#if (_MSC_VER >= 1400) && !defined(_M_ARM)
+#if _MSC_VER >= 1400
 	#include <intrin.h>
 #endif
 
@@ -58,17 +58,27 @@
 # define CRYPTOPP_INTEGER_SSE2 (CRYPTOPP_BOOL_SSE2_ASM_AVAILABLE && CRYPTOPP_BOOL_X86)
 #endif
 
+NAMESPACE_BEGIN(CryptoPP)
+	
 // Debian QEMU/ARMEL issue in MultiplyTop; see http://github.com/weidai11/cryptopp/issues/31.
-#if __ARMEL__ && (CRYPTOPP_GCC_VERSION >= 40900) && (CRYPTOPP_GCC_VERSION < 70000) && __OPTIMIZE__
+#if __ARMEL__ && (CRYPTOPP_GCC_VERSION >= 50200) && (CRYPTOPP_GCC_VERSION < 50300) && __OPTIMIZE__
 # define WORKAROUND_ARMEL_BUG 1
+#endif
+
+// Debian QEMU/ARM64 issue in Integer or ModularArithmetic; see http://github.com/weidai11/cryptopp/issues/61.
+#if (__aarch64__ || __AARCH64EL__) && (CRYPTOPP_GCC_VERSION >= 50200) && (CRYPTOPP_GCC_VERSION < 50300)
+# define WORKAROUND_ARM64_BUG 1
 #endif
 
 #if WORKAROUND_ARMEL_BUG
 # pragma GCC push_options
 # pragma GCC optimize("O1")
 #endif
-
-NAMESPACE_BEGIN(CryptoPP)
+	
+#if WORKAROUND_ARM64_BUG
+# pragma GCC push_options
+# pragma GCC optimize("no-devirtualize")
+#endif
 
 bool AssignIntToInteger(const std::type_info &valueType, void *pInteger, const void *pInt)
 {
@@ -176,7 +186,7 @@ static word AtomicInverseModPower2(word A)
 	#define GetBorrow(u)				u##1
 #else
 	#define Declare2Words(x)			dword x;
-	#if _MSC_VER >= 1400 && !defined(__INTEL_COMPILER) && !defined(_M_ARM)
+	#if _MSC_VER >= 1400 && !defined(__INTEL_COMPILER)
 		#define MultiplyWords(p, a, b)		p = __emulu(a, b);
 	#else
 		#define MultiplyWords(p, a, b)		p = (dword)a*b;
@@ -2789,7 +2799,7 @@ InitializeInteger::InitializeInteger()
 	if (!g_pAssignIntToInteger)
 	{
 		SetFunctionPointers();
-		g_pAssignIntToInteger = (CryptoPP::PAssignIntToInteger)AssignIntToInteger;
+		g_pAssignIntToInteger = AssignIntToInteger;
 	}
 }
 
@@ -2871,40 +2881,13 @@ signed long Integer::ConvertToLong() const
 	return sign==POSITIVE ? value : -(signed long)value;
 }
 
-Integer::Integer(BufferedTransformation &encodedInteger, size_t byteCount, Signedness s, ByteOrder o)
+Integer::Integer(BufferedTransformation &encodedInteger, size_t byteCount, Signedness s)
 {
-	assert(o == BIG_ENDIAN_ORDER || o == LITTLE_ENDIAN_ORDER);
-
-	if(o == LITTLE_ENDIAN_ORDER)
-	{
-		SecByteBlock block(byteCount);
-		encodedInteger.Get(block, block.size());
-		std::reverse(block.begin(), block.begin()+block.size());
-
-		Decode(block.begin(), block.size(), s);
-		return;
-	}
-
 	Decode(encodedInteger, byteCount, s);
 }
 
-Integer::Integer(const byte *encodedInteger, size_t byteCount, Signedness s, ByteOrder o)
+Integer::Integer(const byte *encodedInteger, size_t byteCount, Signedness s)
 {
-	assert(o == BIG_ENDIAN_ORDER || o == LITTLE_ENDIAN_ORDER);
-
-	if(o == LITTLE_ENDIAN_ORDER)
-	{
-		SecByteBlock block(byteCount);
-#if (CRYPTOPP_MSC_VERSION >= 1500)
-		std::reverse_copy(encodedInteger, encodedInteger+byteCount, 
-			stdext::make_checked_array_iterator(block.begin(), block.size()));
-#else
-		std::reverse_copy(encodedInteger, encodedInteger+byteCount, block.begin());
-#endif
-		Decode(block.begin(), block.size(), s);
-		return;
-	}
-
 	Decode(encodedInteger, byteCount, s);
 }
 
@@ -3046,11 +3029,9 @@ Integer::Integer(word value, size_t length)
 }
 
 template <class T>
-static Integer StringToInteger(const T *str, ByteOrder order)
+static Integer StringToInteger(const T *str)
 {
-	assert( order == BIG_ENDIAN_ORDER || order == LITTLE_ENDIAN_ORDER );
-	
-	int radix, sign = 1;
+	int radix;
 	// GCC workaround
 	// std::char_traits<wchar_t>::length() not defined in GCC 3.2 and STLport 4.5.3
 	unsigned int length;
@@ -3059,7 +3040,7 @@ static Integer StringToInteger(const T *str, ByteOrder order)
 	Integer v;
 
 	if (length == 0)
-		return Integer::Zero();
+		return v;
 
 	switch (str[length-1])
 	{
@@ -3079,117 +3060,45 @@ static Integer StringToInteger(const T *str, ByteOrder order)
 		radix=10;
 	}
 
-	// 'str' is of length 1 or more
-	if (str[0] == '-')
-	{
-		sign = -1;
-		str += 1, length -= 1;
-	}
-
-	if (length > 2 && str[0] == '0' && (str[1] == 'x' || str[1] == 'X'))
-	{
+	if (length > 2 && str[0] == '0' && str[1] == 'x')
 		radix = 16;
-		str += 2, length -= 2;
+
+	for (unsigned i=0; i<length; i++)
+	{
+		int digit;
+
+		if (str[i] >= '0' && str[i] <= '9')
+			digit = str[i] - '0';
+		else if (str[i] >= 'A' && str[i] <= 'F')
+			digit = str[i] - 'A' + 10;
+		else if (str[i] >= 'a' && str[i] <= 'f')
+			digit = str[i] - 'a' + 10;
+		else
+			digit = radix;
+
+		if (digit < radix)
+		{
+			v *= radix;
+			v += digit;
+		}
 	}
 
-	if(order == BIG_ENDIAN_ORDER)
-	{
-		for (unsigned int i=0; i<length; i++)
-		{
-			int digit, ch = static_cast<int>(str[i]);
-            
-			if (ch >= '0' && ch <= '9')
-				digit = ch - '0';
-			else if (ch >= 'A' && ch <= 'F')
-				digit = ch - 'A' + 10;
-			else if (ch >= 'a' && ch <= 'f')
-				digit = ch - 'a' + 10;
-			else
-				digit = radix;
-				
-			if (digit < radix)
-			{
-				v *= radix;
-				v += digit;
-			}
-		}
-	}
-	else if(radix == 16 && order == LITTLE_ENDIAN_ORDER)
-	{
-		// Nibble high, low and count
-		unsigned int nh = 0, nl = 0, nc = 0;
-		Integer position(Integer::One());
-        
-		for (unsigned int i=0; i<length; i++)
-		{
-			int digit, ch = static_cast<int>(str[i]);
-            
-			if (ch >= '0' && ch <= '9')
-				digit = ch - '0';
-			else if (ch >= 'A' && ch <= 'F')
-				digit = ch - 'A' + 10;
-			else if (ch >= 'a' && ch <= 'f')
-				digit = ch - 'a' + 10;
-			else
-				digit = radix;
-            
-			if (digit < radix)
-			{
-				if(nc++ == 0)
-					nh = digit;
-				else
-					nl = digit;
-
-				if(nc == 2)
-				{
-					v += position * (nh << 4 | nl);
-					nc = 0, position <<= 8;
-				}
-			}
-		}
-        
-		if(nc == 1)
-			v += nh * position;
-	}
-	else // LITTLE_ENDIAN_ORDER && radix != 16
-	{
-		for (int i=static_cast<int>(length)-1; i>=0; i--)
-		{
-			int digit, ch = static_cast<int>(str[i]);
-            
-			if (ch >= '0' && ch <= '9')
-				digit = ch - '0';
-			else if (ch >= 'A' && ch <= 'F')
-				digit = ch - 'A' + 10;
-			else if (ch >= 'a' && ch <= 'f')
-				digit = ch - 'a' + 10;
-			else
-				digit = radix;
-            
-			if (digit < radix)
-			{
-				v *= radix;
-				v += digit;
-			}
-		}
-	}
-    
-	if (sign == -1)
+	if (str[0] == '-')
 		v.Negate();
 
 	return v;
 }
 
-Integer::Integer(const char *str, ByteOrder order)
+Integer::Integer(const char *str)
 	: reg(2), sign(POSITIVE)
 {
-	*this = StringToInteger(str,order);
+	*this = StringToInteger(str);
 }
 
-Integer::Integer(const wchar_t *str, ByteOrder order)
+Integer::Integer(const wchar_t *str)
 	: reg(2), sign(POSITIVE)
 {
-	*this = StringToInteger(str,order);
+	*this = StringToInteger(str);
 }
 
 unsigned int Integer::WordCount() const
@@ -3584,14 +3493,7 @@ std::ostream& operator<<(std::ostream& out, const Integer &a)
 //			out << ",";
 	}
 
-#ifdef CRYPTOPP_USE_STD_SHOWBASE
-	if(out.flags() & std::ios_base::showbase)
-		out << suffix;
-        
-	return out;
-#else
- 	return out << suffix;
-#endif
+	return out << suffix;
 }
 
 Integer& Integer::operator++()
@@ -4490,8 +4392,12 @@ std::string IntToString<unsigned long long>(unsigned long long value, unsigned i
 }
 
 NAMESPACE_END
-
+	
 #if WORKAROUND_ARMEL_BUG
+# pragma GCC pop_options
+#endif
+	
+#if WORKAROUND_ARM64_BUG
 # pragma GCC pop_options
 #endif
 

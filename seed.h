@@ -11,16 +11,13 @@
 
 NAMESPACE_BEGIN(CryptoPP)
 
-//! \class SEED_Info
-//! \brief SEED block cipher information
+//! _
 struct SEED_Info : public FixedBlockSize<16>, public FixedKeyLength<16>, public FixedRounds<16>
 {
 	static const char *StaticAlgorithmName() {return "SEED";}
 };
 
-//! \class SEED
-//! \brief SEED block cipher
-//! \sa <a href="http://www.cryptolounge.org/wiki/SEED">SEED</a>
+/// <a href="http://www.cryptolounge.org/wiki/SEED">SEED</a>
 class SEED : public SEED_Info, public BlockCipherDocumentation
 {
 	class CRYPTOPP_NO_VTABLE Base : public BlockCipherImpl<SEED_Info>

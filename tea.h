@@ -12,16 +12,13 @@
 
 NAMESPACE_BEGIN(CryptoPP)
 
-//! \class TEA_Info
-//! \brief TEA block cipher information
+//! _
 struct TEA_Info : public FixedBlockSize<8>, public FixedKeyLength<16>, public VariableRounds<32>
 {
 	static const char *StaticAlgorithmName() {return "TEA";}
 };
 
-//! \class TEA
-//! \brief TEA block cipher
-//! \sa <a href="http://www.weidai.com/scan-mirror/cs.html#TEA">TEA</a>
+/// <a href="http://www.weidai.com/scan-mirror/cs.html#TEA">TEA</a>
 class TEA : public TEA_Info, public BlockCipherDocumentation
 {
 	class CRYPTOPP_NO_VTABLE Base : public BlockCipherImpl<TEA_Info>
@@ -54,16 +51,13 @@ public:
 typedef TEA::Encryption TEAEncryption;
 typedef TEA::Decryption TEADecryption;
 
-//! \class XTEA_Info
-//! \brief XTEA block cipher information
+//! _
 struct XTEA_Info : public FixedBlockSize<8>, public FixedKeyLength<16>, public VariableRounds<32>
 {
 	static const char *StaticAlgorithmName() {return "XTEA";}
 };
 
-//! \class XTEA
-//! \brief XTEA block cipher
-//! \sa <a href="http://www.weidai.com/scan-mirror/cs.html#TEA">XTEA</a>
+/// <a href="http://www.weidai.com/scan-mirror/cs.html#TEA">XTEA</a>
 class XTEA : public XTEA_Info, public BlockCipherDocumentation
 {
 	class CRYPTOPP_NO_VTABLE Base : public BlockCipherImpl<XTEA_Info>
@@ -93,17 +87,14 @@ public:
 	typedef BlockCipherFinal<DECRYPTION, Dec> Decryption;
 };
 
-//! \class BTEA_Info
-//! \brief BTEA block cipher information
+//! _
 struct BTEA_Info : public FixedKeyLength<16>
 {
 	static const char *StaticAlgorithmName() {return "BTEA";}
 };
 
-//! \class BTEA
-//! \brief BTEA block cipher
-//! \details Corrected Block TEA as described in "xxtea". This class hasn't been tested yet.
-//! \sa <a href="http://www.weidai.com/scan-mirror/cs.html#TEA">Corrected Block TEA</a>.
+//! <a href="http://www.weidai.com/scan-mirror/cs.html#TEA">corrected Block TEA</a> (as described in "xxtea").
+/*! This class hasn't been tested yet. */
 class BTEA : public BTEA_Info, public BlockCipherDocumentation
 {
 	class CRYPTOPP_NO_VTABLE Base : public AlgorithmImpl<SimpleKeyingInterfaceImpl<BlockCipher, BTEA_Info>, BTEA_Info>, public BTEA_Info
