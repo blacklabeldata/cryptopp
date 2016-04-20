@@ -3,14 +3,7 @@
 #include "pch.h"
 
 #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
-
-#include "cryptlib.h"
-#include "pubkey.h"
-#include "gfpcrypt.h"
-#include "eccrypto.h"
 #include "blumshub.h"
-#include "filters.h"
-#include "files.h"
 #include "rsa.h"
 #include "md2.h"
 #include "elgamal.h"
@@ -18,33 +11,26 @@
 #include "dsa.h"
 #include "dh.h"
 #include "mqv.h"
+#include "fhmqv.h"
 #include "luc.h"
 #include "xtrcrypt.h"
 #include "rabin.h"
 #include "rw.h"
 #include "eccrypto.h"
-#include "integer.h"
-#include "gf2n.h"
 #include "ecp.h"
 #include "ec2n.h"
 #include "asn.h"
 #include "rng.h"
+#include "files.h"
 #include "hex.h"
 #include "oids.h"
 #include "esign.h"
 #include "osrng.h"
-#include "smartptr.h"
 
 #include <iostream>
-#include <sstream>
 #include <iomanip>
 
 #include "validate.h"
-
-// Aggressive stack checking with VS2005 SP1 and above.
-#if (CRYPTOPP_MSC_VERSION >= 1410)
-# pragma strict_gs_check (on)
-#endif
 
 USING_NAMESPACE(CryptoPP)
 USING_NAMESPACE(std)
@@ -74,15 +60,13 @@ bool ValidateBBS()
 	bool pass = true, fail;
 	int j;
 
-	static const byte output1[] = {
+	const byte output1[] = {
 		0x49,0xEA,0x2C,0xFD,0xB0,0x10,0x64,0xA0,0xBB,0xB9,
 		0x2A,0xF1,0x01,0xDA,0xC1,0x8A,0x94,0xF7,0xB7,0xCE};
-	static const byte output2[] = {
+	const byte output2[] = {
 		0x74,0x45,0x48,0xAE,0xAC,0xB7,0x0E,0xDF,0xAF,0xD7,
 		0xD5,0x0E,0x8E,0x29,0x83,0x75,0x6B,0x27,0x46,0xA1};
-		
-	// Coverity finding, also see http://stackoverflow.com/a/34509163/608639.
-	StreamState ss(cout);
+
 	byte buf[20];
 
 	bbs.GenerateBlock(buf, 20);
@@ -279,13 +263,13 @@ bool ValidateRSA()
 
 	{
 		const char *plain = "Everyone gets Friday off.";
-		static const byte signature[] =
+		byte *signature = (byte *)
 			"\x05\xfa\x6a\x81\x2f\xc7\xdf\x8b\xf4\xf2\x54\x25\x09\xe0\x3e\x84"
 			"\x6e\x11\xb9\xc6\x20\xbe\x20\x09\xef\xb4\x40\xef\xbc\xc6\x69\x21"
 			"\x69\x94\xac\x04\xf3\x41\xb5\x7d\x05\x20\x2d\x42\x8f\xb2\xa2\x7b"
 			"\x5c\x77\xdf\xd9\xb1\x5b\xfc\x3d\x55\x93\x53\x50\x34\x10\xc1\xe1";
 
-		FileSource keys(CRYPTOPP_DATA_DIR "TestData/rsa512a.dat", true, new HexDecoder);
+		FileSource keys("TestData/rsa512a.dat", true, new HexDecoder);
 		Weak::RSASSA_PKCS1v15_MD2_Signer rsaPriv(keys);
 		Weak::RSASSA_PKCS1v15_MD2_Verifier rsaPub(rsaPriv);
 
@@ -310,7 +294,7 @@ bool ValidateRSA()
 		cout << "invalid signature verification\n";
 	}
 	{
-		FileSource keys(CRYPTOPP_DATA_DIR "TestData/rsa1024.dat", true, new HexDecoder);
+		FileSource keys("TestData/rsa1024.dat", true, new HexDecoder);
 		RSAES_PKCS1v15_Decryptor rsaPriv(keys);
 		RSAES_PKCS1v15_Encryptor rsaPub(rsaPriv);
 
@@ -325,20 +309,20 @@ bool ValidateRSA()
 	{
 		byte *plain = (byte *)
 			"\x54\x85\x9b\x34\x2c\x49\xea\x2a";
-		static const byte encrypted[] =
+		byte *encrypted = (byte *)
 			"\x14\xbd\xdd\x28\xc9\x83\x35\x19\x23\x80\xe8\xe5\x49\xb1\x58\x2a"
 			"\x8b\x40\xb4\x48\x6d\x03\xa6\xa5\x31\x1f\x1f\xd5\xf0\xa1\x80\xe4"
 			"\x17\x53\x03\x29\xa9\x34\x90\x74\xb1\x52\x13\x54\x29\x08\x24\x52"
 			"\x62\x51";
-		static const byte oaepSeed[] =
+		byte *oaepSeed = (byte *)
 			"\xaa\xfd\x12\xf6\x59\xca\xe6\x34\x89\xb4\x79\xe5\x07\x6d\xde\xc2"
 			"\xf0\x6c\xb5\x8f";
 		ByteQueue bq;
 		bq.Put(oaepSeed, 20);
 		FixedRNG rng(bq);
 
-		FileSource privFile(CRYPTOPP_DATA_DIR "TestData/rsa400pv.dat", true, new HexDecoder);
-		FileSource pubFile(CRYPTOPP_DATA_DIR "TestData/rsa400pb.dat", true, new HexDecoder);
+		FileSource privFile("TestData/rsa400pv.dat", true, new HexDecoder);
+		FileSource pubFile("TestData/rsa400pb.dat", true, new HexDecoder);
 		RSAES_OAEP_SHA_Decryptor rsaPriv;
 		rsaPriv.AccessKey().BERDecodePrivateKey(privFile, false, 0);
 		RSAES_OAEP_SHA_Encryptor rsaPub(pubFile);
@@ -361,7 +345,7 @@ bool ValidateDH()
 {
 	cout << "\nDH validation suite running...\n\n";
 
-	FileSource f(CRYPTOPP_DATA_DIR "TestData/dh1024.dat", true, new HexDecoder());
+	FileSource f("TestData/dh1024.dat", true, new HexDecoder());
 	DH dh(f);
 	return SimpleKeyAgreementValidate(dh);
 }
@@ -370,16 +354,73 @@ bool ValidateMQV()
 {
 	cout << "\nMQV validation suite running...\n\n";
 
-	FileSource f(CRYPTOPP_DATA_DIR "TestData/mqv1024.dat", true, new HexDecoder());
+	FileSource f("TestData/mqv1024.dat", true, new HexDecoder());
 	MQV mqv(f);
 	return AuthenticatedKeyAgreementValidate(mqv);
+}
+
+bool ValidateFHMQV()
+{
+	cout << "\nFHMQV validation suite running...\n\n";
+  
+	FHMQV< ECP >::Domain fhmqvB(false /*server*/);
+	FileSource f("TestData/fhmqv256.dat", true, new HexDecoder());
+	fhmqvB.AccessGroupParameters().BERDecode(f);
+
+	if (fhmqvB.GetCryptoParameters().Validate(GlobalRNG(), 3))
+		cout << "passed    authenticated key agreement domain parameters validation (server)" << endl;
+	else
+	{
+		cout << "FAILED    authenticated key agreement domain parameters invalid (server)" << endl;
+		return false;
+	}
+
+	const OID oid = ASN1::secp256r1();
+	FHMQV< ECP >::Domain fhmqvA(oid, true /*client*/);
+
+	if (fhmqvA.GetCryptoParameters().Validate(GlobalRNG(), 3))
+		cout << "passed    authenticated key agreement domain parameters validation (client)" << endl;
+	else
+	{
+		cout << "FAILED    authenticated key agreement domain parameters invalid (client)" << endl;
+		return false;
+	}
+
+	SecByteBlock sprivA(fhmqvA.StaticPrivateKeyLength()), sprivB(fhmqvB.StaticPrivateKeyLength());
+	SecByteBlock eprivA(fhmqvA.EphemeralPrivateKeyLength()), eprivB(fhmqvB.EphemeralPrivateKeyLength());
+	SecByteBlock spubA(fhmqvA.StaticPublicKeyLength()), spubB(fhmqvB.StaticPublicKeyLength());
+	SecByteBlock epubA(fhmqvA.EphemeralPublicKeyLength()), epubB(fhmqvB.EphemeralPublicKeyLength());
+	SecByteBlock valA(fhmqvA.AgreedValueLength()), valB(fhmqvB.AgreedValueLength());
+
+	fhmqvA.GenerateStaticKeyPair(GlobalRNG(), sprivA, spubA);
+	fhmqvB.GenerateStaticKeyPair(GlobalRNG(), sprivB, spubB);
+	fhmqvA.GenerateEphemeralKeyPair(GlobalRNG(), eprivA, epubA);
+	fhmqvB.GenerateEphemeralKeyPair(GlobalRNG(), eprivB, epubB);
+
+	memset(valA.begin(), 0x00, valA.size());
+	memset(valB.begin(), 0x11, valB.size());
+
+	if (!(fhmqvA.Agree(valA, sprivA, eprivA, spubB, epubB) && fhmqvB.Agree(valB, sprivB, eprivB, spubA, epubA)))
+	{
+		cout << "FAILED    authenticated key agreement failed" << endl;
+		return false;
+	}
+
+	if (memcmp(valA.begin(), valB.begin(), fhmqvA.AgreedValueLength()))
+	{
+		cout << "FAILED    authenticated agreed values not equal" << endl;
+		return false;
+	}
+
+	cout << "passed    authenticated key agreement" << endl;
+	return true;
 }
 
 bool ValidateLUC_DH()
 {
 	cout << "\nLUC-DH validation suite running...\n\n";
 
-	FileSource f(CRYPTOPP_DATA_DIR "TestData/lucd512.dat", true, new HexDecoder());
+	FileSource f("TestData/lucd512.dat", true, new HexDecoder());
 	LUC_DH dh(f);
 	return SimpleKeyAgreementValidate(dh);
 }
@@ -388,7 +429,7 @@ bool ValidateXTR_DH()
 {
 	cout << "\nXTR-DH validation suite running...\n\n";
 
-	FileSource f(CRYPTOPP_DATA_DIR "TestData/xtrdh171.dat", true, new HexDecoder());
+	FileSource f("TestData/xtrdh171.dat", true, new HexDecoder());
 	XTR_DH dh(f);
 	return SimpleKeyAgreementValidate(dh);
 }
@@ -398,7 +439,7 @@ bool ValidateElGamal()
 	cout << "\nElGamal validation suite running...\n\n";
 	bool pass = true;
 	{
-		FileSource fc(CRYPTOPP_DATA_DIR "TestData/elgc1024.dat", true, new HexDecoder);
+		FileSource fc("TestData/elgc1024.dat", true, new HexDecoder);
 		ElGamalDecryptor privC(fc);
 		ElGamalEncryptor pubC(privC);
 		privC.AccessKey().Precompute();
@@ -416,7 +457,7 @@ bool ValidateDLIES()
 	cout << "\nDLIES validation suite running...\n\n";
 	bool pass = true;
 	{
-		FileSource fc(CRYPTOPP_DATA_DIR "TestData/dlie1024.dat", true, new HexDecoder);
+		FileSource fc("TestData/dlie1024.dat", true, new HexDecoder);
 		DLIES<>::Decryptor privC(fc);
 		DLIES<>::Encryptor pubC(privC);
 		pass = CryptoSystemValidate(privC, pubC) && pass;
@@ -439,7 +480,7 @@ bool ValidateNR()
 	cout << "\nNR validation suite running...\n\n";
 	bool pass = true;
 	{
-		FileSource f(CRYPTOPP_DATA_DIR "TestData/nr2048.dat", true, new HexDecoder);
+		FileSource f("TestData/nr2048.dat", true, new HexDecoder);
 		NR<SHA>::Signer privS(f);
 		privS.AccessKey().Precompute();
 		NR<SHA>::Verifier pubS(privS);
@@ -461,15 +502,14 @@ bool ValidateDSA(bool thorough)
 	cout << "\nDSA validation suite running...\n\n";
 
 	bool pass = true;
-	FileSource fs1(CRYPTOPP_DATA_DIR "TestData/dsa1024.dat", true, new HexDecoder());
+	FileSource fs1("TestData/dsa1024.dat", true, new HexDecoder());
 	DSA::Signer priv(fs1);
 	DSA::Verifier pub(priv);
-	FileSource fs2(CRYPTOPP_DATA_DIR "TestData/dsa1024b.dat", true, new HexDecoder());
+	FileSource fs2("TestData/dsa1024b.dat", true, new HexDecoder());
 	DSA::Verifier pub1(fs2);
 	assert(pub.GetKey() == pub1.GetKey());
 	pass = SignatureValidate(priv, pub, thorough) && pass;
-	pass = RunTestDataFile(CRYPTOPP_DATA_DIR "TestVectors/dsa.txt", g_nullNameValuePairs, thorough) && pass;
-
+	pass = RunTestDataFile("TestVectors/dsa.txt", g_nullNameValuePairs, thorough) && pass;
 	return pass;
 }
 
@@ -479,7 +519,7 @@ bool ValidateLUC()
 	bool pass=true;
 
 	{
-		FileSource f(CRYPTOPP_DATA_DIR "TestData/luc1024.dat", true, new HexDecoder);
+		FileSource f("TestData/luc1024.dat", true, new HexDecoder);
 		LUCSSA_PKCS1v15_SHA_Signer priv(f);
 		LUCSSA_PKCS1v15_SHA_Verifier pub(priv);
 		pass = SignatureValidate(priv, pub) && pass;
@@ -496,14 +536,14 @@ bool ValidateLUC_DL()
 {
 	cout << "\nLUC-HMP validation suite running...\n\n";
 
-	FileSource f(CRYPTOPP_DATA_DIR "TestData/lucs512.dat", true, new HexDecoder);
+	FileSource f("TestData/lucs512.dat", true, new HexDecoder);
 	LUC_HMP<SHA>::Signer privS(f);
 	LUC_HMP<SHA>::Verifier pubS(privS);
 	bool pass = SignatureValidate(privS, pubS);
 
 	cout << "\nLUC-IES validation suite running...\n\n";
 
-	FileSource fc(CRYPTOPP_DATA_DIR "TestData/lucc512.dat", true, new HexDecoder);
+	FileSource fc("TestData/lucc512.dat", true, new HexDecoder);
 	LUC_IES<>::Decryptor privC(fc);
 	LUC_IES<>::Encryptor pubC(privC);
 	pass = CryptoSystemValidate(privC, pubC) && pass;
@@ -517,7 +557,7 @@ bool ValidateRabin()
 	bool pass=true;
 
 	{
-		FileSource f(CRYPTOPP_DATA_DIR "TestData/rabi1024.dat", true, new HexDecoder);
+		FileSource f("TestData/rabi1024.dat", true, new HexDecoder);
 		RabinSS<PSSR, SHA>::Signer priv(f);
 		RabinSS<PSSR, SHA>::Verifier pub(priv);
 		pass = SignatureValidate(priv, pub) && pass;
@@ -534,7 +574,7 @@ bool ValidateRW()
 {
 	cout << "\nRW validation suite running...\n\n";
 
-	FileSource f(CRYPTOPP_DATA_DIR "TestData/rw1024.dat", true, new HexDecoder);
+	FileSource f("TestData/rw1024.dat", true, new HexDecoder);
 	RWSS<PSSR, SHA>::Signer priv(f);
 	RWSS<PSSR, SHA>::Verifier pub(priv);
 
@@ -546,127 +586,13 @@ bool ValidateBlumGoldwasser()
 {
 	cout << "\nBlumGoldwasser validation suite running...\n\n";
 
-	FileSource f(CRYPTOPP_DATA_DIR "TestData/blum512.dat", true, new HexDecoder);
+	FileSource f("TestData/blum512.dat", true, new HexDecoder);
 	BlumGoldwasserPrivateKey priv(f);
 	BlumGoldwasserPublicKey pub(priv);
 
 	return CryptoSystemValidate(priv, pub);
 }
 */
-
-#if !defined(NDEBUG) && !defined(CRYPTOPP_IMPORTS)
-// Issue 64: "PolynomialMod2::operator<<=", http://github.com/weidai11/cryptopp/issues/64
-bool TestPolynomialMod2()
-{
-	bool pass1 = true, pass2 = true, pass3 = true;
-
-	cout << "\nTesting PolynomialMod2 bit operations...\n\n";
-	
-	static const unsigned int start = 0;
-	static const unsigned int stop = 4 * WORD_BITS + 1;
-
-	for (unsigned int i=start; i < stop; i++)
-	{
-		PolynomialMod2 p(1);
-		p <<= i;
-		
-		Integer n(Integer::One());
-		n <<= i;
-		
-		std::ostringstream oss1;
-		oss1 << p;
-		
-		std::string str1, str2;
-		
-		// str1 needs the commas removed used for grouping
-		str1 = oss1.str();
-		str1.erase(std::remove(str1.begin(), str1.end(), ','), str1.end());
-		
-		// str1 needs the trailing 'b' removed
-		str1.erase(str1.end() - 1);
-
-		// str2 is fine as-is
-		str2 = IntToString(n, 2);
-		
-		pass1 &= (str1 == str2);
-	}
-	
-	for (unsigned int i=start; i < stop; i++)
-	{
-		const word w((word)SIZE_MAX);
-
-		PolynomialMod2 p(w);
-		p <<= i;
-
-		Integer n(Integer::POSITIVE, static_cast<lword>(w));
-		n <<= i;
-		
-		std::ostringstream oss1;
-		oss1 << p;
-		
-		std::string str1, str2;
-		
-		// str1 needs the commas removed used for grouping
-		str1 = oss1.str();
-		str1.erase(std::remove(str1.begin(), str1.end(), ','), str1.end());
-		
-		// str1 needs the trailing 'b' removed
-		str1.erase(str1.end() - 1);
-
-		// str2 is fine as-is
-		str2 = IntToString(n, 2);
-		
-		pass2 &= (str1 == str2);
-	}
-	
-	RandomNumberGenerator& prng = GlobalRNG();
-	for (unsigned int i=start; i < stop; i++)
-	{
-		word w; 	// Cast to lword due to Visual Studio
-		prng.GenerateBlock((byte*)&w, sizeof(w));
-
-		PolynomialMod2 p(w);
-		p <<= i;
-
-		Integer n(Integer::POSITIVE, static_cast<lword>(w));
-		n <<= i;
-		
-		std::ostringstream oss1;
-		oss1 << p;
-		
-		std::string str1, str2;
-		
-		// str1 needs the commas removed used for grouping
-		str1 = oss1.str();
-		str1.erase(std::remove(str1.begin(), str1.end(), ','), str1.end());
-		
-		// str1 needs the trailing 'b' removed
-		str1.erase(str1.end() - 1);
-
-		// str2 is fine as-is
-		str2 = IntToString(n, 2);
-
-		if (str1 != str2)
-		{
-			cout << "  Oops..." << "\n";
-			cout << "     random: " << std::hex << n << std::dec << "\n";
-			cout << "     str1: " << str1 << "\n";
-			cout << "     str2: " << str2 << "\n";
-		}
-		
-		pass3 &= (str1 == str2);
-	}
-
-	cout << (!pass1 ? "FAILED" : "passed") << "    " << "1 shifted over range [" << dec << start << "," << stop << "]" << "\n";
-	cout << (!pass2 ? "FAILED" : "passed") << "    " << "0x" << hex << word(SIZE_MAX) << dec << " shifted over range [" << start << "," << stop << "]" << "\n";
-	cout << (!pass3 ? "FAILED" : "passed") << "    " << "random values shifted over range [" << dec << start << "," << stop << "]" << "\n";
-
-	if (!(pass1 && pass2 && pass3))
-		cout.flush();
-
-	return pass1 && pass2 && pass3;
-}
-#endif
 
 bool ValidateECP()
 {
@@ -787,7 +713,7 @@ bool ValidateECDSA()
 
 	Integer h("A9993E364706816ABA3E25717850C26C9CD0D89DH");
 	Integer k("3eeace72b4919d991738d521879f787cb590aff8189d2b69H");
-	static const byte sig[]="\x03\x8e\x5a\x11\xfb\x55\xe4\xc6\x54\x71\xdc\xd4\x99\x84\x52\xb1\xe0\x2d\x8a\xf7\x09\x9b\xb9\x30"
+	byte sig[]="\x03\x8e\x5a\x11\xfb\x55\xe4\xc6\x54\x71\xdc\xd4\x99\x84\x52\xb1\xe0\x2d\x8a\xf7\x09\x9b\xb9\x30"
 		"\x0c\x9a\x08\xc3\x44\x68\xc2\x44\xb4\xe5\xd6\xb2\x1b\x3c\x68\x36\x28\x07\x41\x60\x20\x32\x8b\x6e";
 	Integer r(sig, 24);
 	Integer s(sig+24, 24);
@@ -822,15 +748,15 @@ bool ValidateESIGN()
 
 	bool pass = true, fail;
 
-	static const char plain[] = "test";
-	static const byte signature[] =
+	const char *plain = "test";
+	const byte *signature = (byte *)
 		"\xA3\xE3\x20\x65\xDE\xDA\xE7\xEC\x05\xC1\xBF\xCD\x25\x79\x7D\x99\xCD\xD5\x73\x9D\x9D\xF3\xA4\xAA\x9A\xA4\x5A\xC8\x23\x3D\x0D\x37\xFE\xBC\x76\x3F\xF1\x84\xF6\x59"
 		"\x14\x91\x4F\x0C\x34\x1B\xAE\x9A\x5C\x2E\x2E\x38\x08\x78\x77\xCB\xDC\x3C\x7E\xA0\x34\x44\x5B\x0F\x67\xD9\x35\x2A\x79\x47\x1A\x52\x37\x71\xDB\x12\x67\xC1\xB6\xC6"
 		"\x66\x73\xB3\x40\x2E\xD6\xF2\x1A\x84\x0A\xB6\x7B\x0F\xEB\x8B\x88\xAB\x33\xDD\xE4\x83\x21\x90\x63\x2D\x51\x2A\xB1\x6F\xAB\xA7\x5C\xFD\x77\x99\xF2\xE1\xEF\x67\x1A"
 		"\x74\x02\x37\x0E\xED\x0A\x06\xAD\xF4\x15\x65\xB8\xE1\xD1\x45\xAE\x39\x19\xB4\xFF\x5D\xF1\x45\x7B\xE0\xFE\x72\xED\x11\x92\x8F\x61\x41\x4F\x02\x00\xF2\x76\x6F\x7C"
 		"\x79\xA2\xE5\x52\x20\x5D\x97\x5E\xFE\x39\xAE\x21\x10\xFB\x35\xF4\x80\x81\x41\x13\xDD\xE8\x5F\xCA\x1E\x4F\xF8\x9B\xB2\x68\xFB\x28";
 
-	FileSource keys(CRYPTOPP_DATA_DIR "TestData/esig1536.dat", true, new HexDecoder);
+	FileSource keys("TestData/esig1536.dat", true, new HexDecoder);
 	ESIGN<SHA>::Signer signer(keys);
 	ESIGN<SHA>::Verifier verifier(signer);
 

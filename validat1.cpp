@@ -3,12 +3,6 @@
 #include "pch.h"
 
 #define CRYPTOPP_ENABLE_NAMESPACE_WEAK 1
-
-#include "cryptlib.h"
-#include "pubkey.h"
-#include "gfpcrypt.h"
-#include "eccrypto.h"
-#include "filters.h"
 #include "files.h"
 #include "hex.h"
 #include "base32.h"
@@ -18,6 +12,7 @@
 #include "dmac.h"
 #include "idea.h"
 #include "des.h"
+#include "aes.h"
 #include "rc2.h"
 #include "arc4.h"
 #include "rc5.h"
@@ -31,9 +26,6 @@
 #include "seal.h"
 #include "rc6.h"
 #include "mars.h"
-#include "aes.h"
-#include "cpu.h"
-#include "rng.h"
 #include "rijndael.h"
 #include "twofish.h"
 #include "serpent.h"
@@ -41,10 +33,8 @@
 #include "shacal2.h"
 #include "camellia.h"
 #include "osrng.h"
-#include "rdrand.h"
 #include "zdeflate.h"
-#include "smartptr.h"
-#include "channels.h"
+#include "cpu.h"
 
 #include <time.h>
 #include <memory>
@@ -53,11 +43,6 @@
 
 #include "validate.h"
 
-// Aggressive stack checking with VS2005 SP1 and above.
-#if (CRYPTOPP_MSC_VERSION >= 1410)
-# pragma strict_gs_check (on)
-#endif
-
 USING_NAMESPACE(CryptoPP)
 USING_NAMESPACE(std)
 
@@ -65,39 +50,22 @@ bool ValidateAll(bool thorough)
 {
 	bool pass=TestSettings();
 	pass=TestOS_RNG() && pass;
-	pass=TestAutoSeeded() && pass;
-	pass=TestAutoSeededX917() && pass;
-	
-#if (CRYPTOPP_BOOL_X86 || CRYPTOPP_BOOL_X32 || CRYPTOPP_BOOL_X64)
-	pass=TestRDRAND() && pass;
-	pass=TestRDSEED() && pass;
-#endif
-
-#if !defined(NDEBUG) && !defined(CRYPTOPP_IMPORTS)
-	// http://github.com/weidai11/cryptopp/issues/92
-	pass=TestSecBlock() && pass;
-	// http://github.com/weidai11/cryptopp/issues/64
-	pass=TestPolynomialMod2() && pass;
-#endif
 
 	pass=ValidateCRC32() && pass;
 	pass=ValidateAdler32() && pass;
 	pass=ValidateMD2() && pass;
 	pass=ValidateMD5() && pass;
 	pass=ValidateSHA() && pass;
-	pass=RunTestDataFile(CRYPTOPP_DATA_DIR "TestVectors/sha3.txt") && pass;
+	pass=RunTestDataFile("TestVectors/sha3.txt") && pass;
 	pass=ValidateTiger() && pass;
 	pass=ValidateRIPEMD() && pass;
 	pass=ValidatePanama() && pass;
 	pass=ValidateWhirlpool() && pass;
-	pass=ValidateBLAKE2s() && pass;
-	pass=ValidateBLAKE2b() && pass;
 
 	pass=ValidateHMAC() && pass;
 	pass=ValidateTTMAC() && pass;
 
 	pass=ValidatePBKDF() && pass;
-	pass=ValidateHKDF() && pass;
 
 	pass=ValidateDES() && pass;
 	pass=ValidateCipherModes() && pass;
@@ -127,12 +95,13 @@ bool ValidateAll(bool thorough)
 	pass=ValidateCCM() && pass;
 	pass=ValidateGCM() && pass;
 	pass=ValidateCMAC() && pass;
-	pass=RunTestDataFile(CRYPTOPP_DATA_DIR "TestVectors/eax.txt") && pass;
-	pass=RunTestDataFile(CRYPTOPP_DATA_DIR "TestVectors/seed.txt") && pass;
+	pass=RunTestDataFile("TestVectors/eax.txt") && pass;
+	pass=RunTestDataFile("TestVectors/seed.txt") && pass;
 
 	pass=ValidateBBS() && pass;
 	pass=ValidateDH() && pass;
 	pass=ValidateMQV() && pass;
+	pass=ValidateFHMQV() && pass;
 	pass=ValidateRSA() && pass;
 	pass=ValidateElGamal() && pass;
 	pass=ValidateDLIES() && pass;
@@ -160,11 +129,6 @@ bool ValidateAll(bool thorough)
 
 bool TestSettings()
 {
-	// Thanks to IlyaBizyaev and Zireael, http://github.com/weidai11/cryptopp/issues/28
-#if defined(__MINGW32__)
-	using CryptoPP::memcpy_s;
-#endif
-
 	bool pass = true;
 
 	cout << "\nTesting Settings...\n\n";
@@ -199,9 +163,8 @@ bool TestSettings()
 	}
 
 #ifdef CRYPTOPP_ALLOW_UNALIGNED_DATA_ACCESS
-	// Don't assert the alignment of testvals. That's what this test is for.
 	byte testvals[10] = {1,2,2,3,3,3,3,2,2,1};
-	if (*(word32 *)(void *)(testvals+3) == 0x03030303 && *(word64 *)(void *)(testvals+1) == W64LIT(0x0202030303030202))
+	if (*(word32 *)(testvals+3) == 0x03030303 && *(word64 *)(testvals+1) == W64LIT(0x0202030303030202))
 		cout << "passed:  Your machine allows unaligned data access.\n";
 	else
 	{
@@ -281,7 +244,6 @@ bool TestSettings()
 	bool hasISSE = HasISSE();
 	bool hasSSE2 = HasSSE2();
 	bool hasSSSE3 = HasSSSE3();
-	bool hasSSE4 = HasSSE4();
 	bool isP4 = IsP4();
 	int cacheLineSize = GetCacheLineSize();
 
@@ -293,7 +255,7 @@ bool TestSettings()
 	else
 		cout << "passed:  ";
 
-	cout << "hasMMX == " << hasMMX << ", hasISSE == " << hasISSE << ", hasSSE2 == " << hasSSE2 << ", hasSSSE3 == " << hasSSE4 << ", hasSSE4 == " << hasSSSE3 << ", hasAESNI == " << HasAESNI() << ", hasRDRAND == " << HasRDRAND() << ", hasRDSEED == " << HasRDSEED() << ", hasCLMUL == " << HasCLMUL() << ", isP4 == " << isP4 << ", cacheLineSize == " << cacheLineSize;
+	cout << "hasMMX == " << hasMMX << ", hasISSE == " << hasISSE << ", hasSSE2 == " << hasSSE2 << ", hasSSSE3 == " << hasSSSE3 << ", hasAESNI == " << HasAESNI() << ", hasCLMUL == " << HasCLMUL() << ", isP4 == " << isP4 << ", cacheLineSize == " << cacheLineSize;
 	cout << ", AESNI_INTRINSICS == " << CRYPTOPP_BOOL_AESNI_INTRINSICS_AVAILABLE << endl;
 #endif
 
@@ -305,485 +267,11 @@ bool TestSettings()
 	return pass;
 }
 
-#if !defined(NDEBUG) && !defined(CRYPTOPP_IMPORTS)
-bool TestSecBlock()
-{
-	cout << "\nTesting SecBlock...\n\n";
-
-	bool result = true, temp = true;
-	
-	//********** Zeroized block **********//
-	
-	// NULL ptr with a size means to create a new SecBloc with all elements zero'd
-	SecByteBlock z1(NULL, 256);
-	temp = true;
-
-	for (size_t i = 0; i < z1.size(); i++)
-		temp &= (z1[i] == 0);
-
-	result &= temp;
-	if (!temp)
-		cout << "FAILED:";
-	else
-		cout << "passed:";
-	cout << "  Zeroized byte array" << endl;
-
-	SecBlock<word32> z2(NULL, 256);
-	temp = true;
-
-	for (size_t i = 0; i < z2.size(); i++)
-		temp &= (z2[i] == 0);
-
-	result &= temp;
-	if (!temp)
-		cout << "FAILED:";
-	else
-		cout << "passed:";
-	cout << "  Zeroized word32 array" << endl;
-
-	//********** Assign **********//
-
-	try
-	{
-		temp = true;
-		SecByteBlock a, b;
-		a.Assign((const byte*)"a", 1);
-		b.Assign((const byte*)"b", 1);
-
-		temp &= (a.SizeInBytes() == 1);
-		temp &= (b.SizeInBytes() == 1);
-		temp &= (a[0] == 'a');
-		temp &= (b[0] == 'b');
-
-		a.Assign((const byte*)"ab", 2);
-		b.Assign((const byte*)"cd", 2);
-
-		temp &= (a.SizeInBytes() == 2);
-		temp &= (b.SizeInBytes() == 2);
-		temp &= (a[0] == 'a' && a[1] == 'b');
-		temp &= (b[0] == 'c' && b[1] == 'd');
-	}
-	catch(const Exception& /*ex*/)
-	{
-		temp = false;
-	}
-
-	result &= temp;
-	if (!temp)
-		cout << "FAILED:";
-	else
-		cout << "passed:";
-	cout << "  Assign byte" << endl;
-
-	try
-	{
-		temp = true;
-		SecBlock<word32> a, b;
-		word32 one[1] = {1}, two[1] = {2};
-
-		a.Assign(one, 1);
-		b.Assign(two, 1);
-
-		temp &= (a.SizeInBytes() == 4);
-		temp &= (b.SizeInBytes() == 4);
-		temp &= (a[0] == 1);
-		temp &= (b[0] == 2);
-
-		word32 three[2] = {1,2}, four[2] = {3,4};
-
-		a.Assign(three, 2);
-		b.Assign(four, 2);
-
-		temp &= (a.SizeInBytes() == 8);
-		temp &= (b.SizeInBytes() == 8);
-		temp &= (a[0] == 1 && a[1] == 2);
-		temp &= (b[0] == 3 && b[1] == 4);
-	}
-	catch(const Exception& /*ex*/)
-	{
-		temp = false;
-	}
-
-	result &= temp;
-	if (!temp)
-		cout << "FAILED:";
-	else
-		cout << "passed:";
-	cout << "  Assign word32" << endl;
-
-	//********** Append **********//
-
-	try
-	{
-		temp = true;
-		SecByteBlock a, b;
-		a.Assign((const byte*)"a", 1);
-		b.Assign((const byte*)"b", 1);
-
-		a += b;
-		temp &= (a.SizeInBytes() == 2);
-		temp &= (a[0] == 'a' && a[1] == 'b');
-
-		a.Assign((const byte*)"ab", 2);
-		b.Assign((const byte*)"cd", 2);
-
-		a += b;
-		temp &= (a.SizeInBytes() == 4);
-		temp &= (a[0] == 'a' && a[1] == 'b' && a[2] == 'c' && a[3] == 'd');
-
-		a.Assign((const byte*)"a", 1);
-
-		a += a;
-		temp &= (a.SizeInBytes() == 2);
-		temp &= (a[0] == 'a' && a[1] == 'a');
-
-		a.Assign((const byte*)"ab", 2);
-
-		a += a;
-		temp &= (a.SizeInBytes() == 4);
-		temp &= (a[0] == 'a' && a[1] == 'b' && a[2] == 'a' && a[3] == 'b');
-	}
-	catch(const Exception& /*ex*/)
-	{
-		temp = false;
-	}
-
-	result &= temp;
-	if (!temp)
-		cout << "FAILED:";
-	else
-		cout << "passed:";
-	cout << "  Append byte" << endl;
-
-	try
-	{
-		temp = true;
-		SecBlock<word32> a, b;
-		word32 one[1] = {1}, two[1] = {2};
-
-		a.Assign(one, 1);
-		b.Assign(two, 1);
-
-		a += b;
-		temp &= (a.SizeInBytes() == 8);
-		temp &= (a[0] == 1 && a[1] == 2);
-
-		word32 three[2] = {1,2}, four[2] = {3,4};
-
-		a.Assign(three, 2);
-		b.Assign(four, 2);
-
-		a += b;
-		temp &= (a.SizeInBytes() == 16);
-		temp &= (a[0] == 1 && a[1] == 2 && a[2] == 3 && a[3] == 4);
-
-		a.Assign(one, 1);
-
-		a += a;
-		temp &= (a.SizeInBytes() == 8);
-		temp &= (a[0] == 1 && a[1] == 1);
-
-		a.Assign(three, 2);
-
-		a += a;
-		temp &= (a.SizeInBytes() == 16);
-		temp &= (a[0] == 1 && a[1] == 2 && a[2] == 1 && a[3] == 2);
-	}
-	catch(const Exception& /*ex*/)
-	{
-		temp = false;
-	}
-
-	result &= temp;
-	if (!temp)
-		cout << "FAILED:";
-	else
-		cout << "passed:";
-	cout << "  Append word32" << endl;
-
-	//********** Concatenate **********//
-
-	try
-	{
-		temp = true;
-		SecByteBlock a, b, c;
-		a.Assign((const byte*)"a", 1);
-		b.Assign((const byte*)"b", 1);
-
-		c = a + b;
-		temp &= (a[0] == 'a');
-		temp &= (b[0] == 'b');
-		temp &= (c.SizeInBytes() == 2);
-		temp &= (c[0] == 'a' && c[1] == 'b');
-
-		a.Assign((const byte*)"ab", 2);
-		b.Assign((const byte*)"cd", 2);
-
-		c = a + b;
-		temp &= (a[0] == 'a' && a[1] == 'b');
-		temp &= (b[0] == 'c' && b[1] == 'd');
-		temp &= (c.SizeInBytes() == 4);
-		temp &= (c[0] == 'a' && c[1] == 'b' && c[2] == 'c' && c[3] == 'd');
-	}
-	catch(const Exception& /*ex*/)
-	{
-		temp = false;
-	}
-
-	result &= temp;
-	if (!temp)
-		cout << "FAILED:";
-	else
-		cout << "passed:";
-	cout << "  Concatenate byte" << endl;
-
-	try
-	{
-		temp = true;
-		SecBlock<word32> a, b, c;
-		word32 one[1] = {1}, two[1] = {2};
-
-		a.Assign(one, 1);
-		b.Assign(two, 1);
-
-		c = a + b;
-		temp &= (a[0] == 1);
-		temp &= (b[0] == 2);
-		temp &= (c.SizeInBytes() == 8);
-		temp &= (c[0] == 1 && c[1] == 2);
-
-		word32 three[2] = {1,2}, four[2] = {3,4};
-
-		a.Assign(three, 2);
-		b.Assign(four, 2);
-
-		c = a + b;
-		temp &= (a[0] == 1 && a[1] == 2);
-		temp &= (b[0] == 3 && b[1] == 4);
-		temp &= (c.SizeInBytes() == 16);
-		temp &= (c[0] == 1 && c[1] == 2 && c[2] == 3 && c[3] == 4);
-	}
-	catch(const Exception& /*ex*/)
-	{
-		temp = false;
-	}
-
-	result &= temp;
-	if (!temp)
-		cout << "FAILED:";
-	else
-		cout << "passed:";
-	cout << "  Concatenate word32" << endl;
-
-	//********** Equality **********//
-
-	try
-	{
-		static const byte str1[] = "abcdefghijklmnopqrstuvwxyz";
-		static const byte str2[] = "zyxwvutsrqponmlkjihgfedcba";
-		static const byte str3[] = "0123456789";
-
-		temp = true;
-		SecByteBlock a,b;
-
-		a.Assign(str1, COUNTOF(str1));
-		b.Assign(str1, COUNTOF(str1));
-		temp &= (a.operator==(b));
-
-		a.Assign(str3, COUNTOF(str3));
-		b.Assign(str3, COUNTOF(str3));
-		temp &= (a == b);
-
-		a.Assign(str1, COUNTOF(str1));
-		b.Assign(str2, COUNTOF(str2));
-		temp &= (a.operator!=(b));
-
-		a.Assign(str1, COUNTOF(str1));
-		b.Assign(str3, COUNTOF(str3));
-		temp &= (a != b);
-	}
-	catch(const Exception& /*ex*/)
-	{
-		temp = false;
-	}
-
-	result &= temp;
-	if (!temp)
-		cout << "FAILED:";
-	else
-		cout << "passed:";
-	cout << "  Equality byte" << endl;
-
-	try
-	{
-		static const word32 str1[] = {2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97};
-		static const word32 str2[] = {97,89,83,79,73,71,67,61,59,53,47,43,41,37,31,29,23,19,17,13,11,7,5,3,2};
-		static const word32 str3[] = {0,1,2,3,4,5,6,7,8,9};
-
-		temp = true;
-		SecBlock<word32> a,b;
-
-		a.Assign(str1, COUNTOF(str1));
-		b.Assign(str1, COUNTOF(str1));
-		temp &= (a.operator==(b));
-
-		a.Assign(str3, COUNTOF(str3));
-		b.Assign(str3, COUNTOF(str3));
-		temp &= (a == b);
-
-		a.Assign(str1, COUNTOF(str1));
-		b.Assign(str2, COUNTOF(str2));
-		temp &= (a.operator!=(b));
-
-		a.Assign(str1, COUNTOF(str1));
-		b.Assign(str3, COUNTOF(str3));
-		temp &= (a != b);
-	}
-	catch(const Exception& /*ex*/)
-	{
-		temp = false;
-	}
-
-	result &= temp;
-	if (!temp)
-		cout << "FAILED:";
-	else
-		cout << "passed:";
-	cout << "  Equality word32" << endl;
-
-	//********** Size/Overflow **********//
-
-	try
-	{
-		temp = false;
-		AllocatorBase<word32> A;
-		const size_t max = A.max_size();
-		SecBlock<word32> t(max+1);
-	}
-	catch(const Exception& /*ex*/)
-	{
-		temp = true;
-	}
-	catch(const std::exception& /*ex*/)
-	{
-		temp = true;
-	}
-
-	result &= temp;
-	if (!temp)
-		cout << "FAILED:";
-	else
-		cout << "passed:";
-	cout << "  Overflow word32" << endl;
-
-	try
-	{
-		temp = false;
-		AllocatorBase<word64> A;
-		const size_t max = A.max_size();
-		SecBlock<word64> t(max+1);
-	}
-	catch(const Exception& /*ex*/)
-	{
-		temp = true;
-	}
-	catch(const std::exception& /*ex*/)
-	{
-		temp = true;
-	}
-
-	result &= temp;
-	if (!temp)
-		cout << "FAILED:";
-	else
-		cout << "passed:";
-	cout << "  Overflow word64" << endl;
-
-	//********** FixedSizeAllocatorWithCleanup and Grow **********//
-
-	try
-	{
-		static const unsigned int SIZE = 8;
-		SecBlockWithHint<byte, SIZE> block(SIZE);
-		memset(block, 0xaa, block.SizeInBytes());
-
-		temp = true;
-		block.CleanGrow(SIZE*2);
-		temp &= (block.size() == SIZE*2);
-
-		for (size_t i = 0; i < block.size()/2; i++)
-			temp &= (block[i] == 0xaa);
-		for (size_t i = block.size()/2; i < block.size(); i++)
-			temp &= (block[i] == 0);
-
-		block.CleanNew(SIZE*4);
-		temp &= (block.size() == SIZE*4);
-		for (size_t i = 0; i < block.size(); i++)
-			temp &= (block[i] == 0);
-
-		result &= temp;
-		if (!temp)
-			cout << "FAILED:";
-		else
-			cout << "passed:";
-		cout << "  FixedSizeAllocator and Grow with byte" << endl;
-	}
-	catch(const Exception& /*ex*/)
-	{
-		temp = false;
-	}
-	catch(const std::exception& /*ex*/)
-	{
-		temp = false;
-	}
-
-	try
-	{
-		static const unsigned int SIZE = 8;
-		SecBlockWithHint<word32, SIZE> block(SIZE);
-		memset(block, 0xaa, block.SizeInBytes());
-
-		temp = true;
-		block.CleanGrow(SIZE*2);
-		temp &= (block.size() == SIZE*2);
-
-		for (size_t i = 0; i < block.size()/2; i++)
-			temp &= (block[i] == 0xaaaaaaaa);
-
-		for (size_t i = block.size()/2; i < block.size(); i++)
-			temp &= (block[i] == 0);
-
-		block.CleanNew(SIZE*4);
-		temp &= (block.size() == SIZE*4);
-		for (size_t i = 0; i < block.size(); i++)
-			temp &= (block[i] == 0);
-
-		result &= temp;
-		if (!temp)
-			cout << "FAILED:";
-		else
-			cout << "passed:";
-		cout << "  FixedSizeAllocator and Grow with word32" << endl;
-	}
-	catch(const Exception& /*ex*/)
-	{
-		temp = false;
-	}
-	catch(const std::exception& /*ex*/)
-	{
-		temp = false;
-	}
-
-	return result;
-}
-#endif
-
 bool TestOS_RNG()
 {
 	bool pass = true;
 
 	member_ptr<RandomNumberGenerator> rng;
-
 #ifdef BLOCKING_RNG_AVAILABLE
 	try {rng.reset(new BlockingRng);}
 	catch (OS_RNG_Err &) {}
@@ -793,11 +281,10 @@ bool TestOS_RNG()
 	{
 		cout << "\nTesting operating system provided blocking random number generator...\n\n";
 
-		MeterFilter meter(new Redirector(TheBitBucket()));
-		RandomNumberSource test(*rng, UINT_MAX, false, new Deflator(new Redirector(meter)));
+		ArraySink *sink;
+		RandomNumberSource test(*rng, UINT_MAX, false, new Deflator(sink=new ArraySink(NULL,0)));
 		unsigned long total=0, length=0;
 		time_t t = time(NULL), t1 = 0;
-		CRYPTOPP_UNUSED(length);
 
 		// check that it doesn't take too long to generate a reasonable amount of randomness
 		while (total < 16 && (t1 < 10 || total*8 > (unsigned long)t1))
@@ -850,14 +337,14 @@ bool TestOS_RNG()
 
 		test.AttachedTransformation()->MessageEnd();
 
-		if (meter.GetTotalBytes() < total)
+		if (sink->TotalPutLength() < total)
 		{
 			cout << "FAILED:";
 			pass = false;
 		}
 		else
 			cout << "passed:";
-		cout << "  " << total << " generated bytes compressed to " << meter.GetTotalBytes() << " bytes by DEFLATE" << endl;
+		cout << "  " << total << " generated bytes compressed to " << (size_t)sink->TotalPutLength() << " bytes by DEFLATE" << endl;
 	}
 	else
 		cout << "\nNo operating system provided blocking random number generator, skipping test." << endl;
@@ -872,319 +359,23 @@ bool TestOS_RNG()
 	{
 		cout << "\nTesting operating system provided nonblocking random number generator...\n\n";
 
-		MeterFilter meter(new Redirector(TheBitBucket()));
-		RandomNumberSource test(*rng, 100000, true, new Deflator(new Redirector(meter)));
+		ArraySink *sink;
+		RandomNumberSource test(*rng, 100000, true, new Deflator(sink=new ArraySink(NULL, 0)));
 		
-		if (meter.GetTotalBytes() < 100000)
+		if (sink->TotalPutLength() < 100000)
 		{
 			cout << "FAILED:";
 			pass = false;
 		}
 		else
 			cout << "passed:";
-		cout << "  100000 generated bytes compressed to " << meter.GetTotalBytes() << " bytes by DEFLATE" << endl;
+		cout << "  100000 generated bytes compressed to " << (size_t)sink->TotalPutLength() << " bytes by DEFLATE" << endl;
 	}
 	else
 		cout << "\nNo operating system provided nonblocking random number generator, skipping test." << endl;
 
 	return pass;
 }
-
-#ifdef NO_OS_DEPENDENCE
-bool TestAutoSeeded()
-{
-	return true;
-}
-bool TestAutoSeededX917()
-{
-	return true;
-}
-#else
-bool TestAutoSeeded()
-{	
-	// This tests Auto-Seeding and GenerateIntoBufferedTransformation.
-	cout << "\nTesting AutoSeeded generator...\n\n";
-
-	AutoSeededRandomPool prng;
-	static const unsigned int ENTROPY_SIZE = 32;
-	bool generate = true, discard = true, incorporate = false;
-
-	MeterFilter meter(new Redirector(TheBitBucket()));
-	RandomNumberSource test(prng, 100000, true, new Deflator(new Redirector(meter)));
-	
-	if (meter.GetTotalBytes() < 100000)
-	{
-		cout << "FAILED:";
-		generate = false;
-	}
-	else
-		cout << "passed:";
-	cout << "  100000 generated bytes compressed to " << meter.GetTotalBytes() << " bytes by DEFLATE" << endl;
-		
-	try
-	{
-		prng.DiscardBytes(100000);
-	}
-	catch(const Exception&)
-	{
-		discard = false;
-	}
-	
-	if (!discard)
-		cout << "FAILED:";
-	else
-		cout << "passed:";
-	cout << "  discarded 10000 bytes" << endl;
-
-	try
-	{
-		if(prng.CanIncorporateEntropy())
-		{
-			SecByteBlock entropy(ENTROPY_SIZE);
-			OS_GenerateRandomBlock(false, entropy, entropy.SizeInBytes());
-
-			prng.IncorporateEntropy(entropy, entropy.SizeInBytes());
-			prng.IncorporateEntropy(entropy, entropy.SizeInBytes());
-			prng.IncorporateEntropy(entropy, entropy.SizeInBytes());
-			prng.IncorporateEntropy(entropy, entropy.SizeInBytes());
-
-			incorporate = true;
-		}
-	}
-	catch(const Exception& /*ex*/)
-	{
-	}
-
-	if (!incorporate)
-		cout << "FAILED:";
-	else
-		cout << "passed:";
-	cout << "  IncorporateEntropy with " << 4*ENTROPY_SIZE << " bytes" << endl;
-
-	return generate && discard && incorporate;	
-}
-
-bool TestAutoSeededX917()
-{
-	// This tests Auto-Seeding and GenerateIntoBufferedTransformation.
-	cout << "\nTesting AutoSeeded X917 generator...\n\n";
-
-	AutoSeededX917RNG<AES> prng;
-	static const unsigned int ENTROPY_SIZE = 32;
-	bool generate = true, discard = true, incorporate = false;
-
-	MeterFilter meter(new Redirector(TheBitBucket()));
-	RandomNumberSource test(prng, 100000, true, new Deflator(new Redirector(meter)));
-
-	if (meter.GetTotalBytes() < 100000)
-	{
-		cout << "FAILED:";
-		generate = false;
-	}
-	else
-		cout << "passed:";
-	cout << "  100000 generated bytes compressed to " << meter.GetTotalBytes() << " bytes by DEFLATE" << endl;
-
-	try
-	{
-		prng.DiscardBytes(100000);
-	}
-	catch(const Exception&)
-	{
-		discard = false;
-	}
-
-	if (!discard)
-		cout << "FAILED:";
-	else
-		cout << "passed:";
-	cout << "  discarded 10000 bytes" << endl;
-
-	try
-	{
-		if(prng.CanIncorporateEntropy())
-		{
-			SecByteBlock entropy(ENTROPY_SIZE);
-			OS_GenerateRandomBlock(false, entropy, entropy.SizeInBytes());
-
-			prng.IncorporateEntropy(entropy, entropy.SizeInBytes());
-			prng.IncorporateEntropy(entropy, entropy.SizeInBytes());
-			prng.IncorporateEntropy(entropy, entropy.SizeInBytes());
-			prng.IncorporateEntropy(entropy, entropy.SizeInBytes());
-
-			incorporate = true;
-		}
-	}
-	catch(const Exception& /*ex*/)
-	{
-	}
-
-	if (!incorporate)
-		cout << "FAILED:";
-	else
-		cout << "passed:";
-	cout << "  IncorporateEntropy with " << 4*ENTROPY_SIZE << " bytes" << endl;
-
-	return generate && discard && incorporate;	
-}
-#endif // NO_OS_DEPENDENCE
-
-#if (CRYPTOPP_BOOL_X86 || CRYPTOPP_BOOL_X32 || CRYPTOPP_BOOL_X64)
-bool TestRDRAND()
-{
-	// Testing on 6th generation i7 shows RDRAND needs less than 8 retries for 10K bytes.
-	RDRAND rdrand;
-	bool entropy = true, compress = true, discard = true;
-	static const unsigned int SIZE = 10000;
-
-	if (HasRDRAND())
-	{
-		cout << "\nTesting RDRAND generator...\n\n";
-
-		MeterFilter meter(new Redirector(TheBitBucket()));
-		Deflator deflator(new Redirector(meter));
-		MaurerRandomnessTest maurer;
-
-		ChannelSwitch chsw;
-		chsw.AddDefaultRoute(deflator);
-		chsw.AddDefaultRoute(maurer);
-
-		RandomNumberSource rns(rdrand, SIZE, true, new Redirector(chsw));
-		deflator.Flush(true);
-
-		assert(0 == maurer.BytesNeeded());
-		const double mv = maurer.GetTestValue();
-		if (mv < 0.98f)
-		{
-			cout << "FAILED:";
-			entropy = false;
-		}
-		else
-			cout << "passed:";
-
-		// Coverity finding, also see http://stackoverflow.com/a/34509163/608639.
-		StreamState ss(cout);
-		cout << std::setiosflags(std::ios::fixed) << std::setprecision(6);
-		cout << "  Maurer Randomness Test returned value " << mv << endl;
-
-		if (meter.GetTotalBytes() < SIZE)
-		{
-			cout << "FAILED:";
-			compress = false;
-		}
-		else
-			cout << "passed:";
-		cout << "  " << SIZE << " generated bytes compressed to " << meter.GetTotalBytes() << " bytes by DEFLATE\n";
-
-		try
-		{
-			rdrand.DiscardBytes(SIZE);
-		}
-		catch(const Exception&)
-		{
-			discard = false;
-		}
-
-		if (!discard)
-			cout << "FAILED:";
-		else
-			cout << "passed:";
-		cout << "  discarded " << SIZE << " bytes\n";
-	}
-	else
-		cout << "\nRDRAND generator not available, skipping test.\n";
-
-	// Squash code coverage warnings on unused functions
-	(void)rdrand.AlgorithmName();
-	(void)rdrand.CanIncorporateEntropy();
-	rdrand.SetRetries(rdrand.GetRetries());
-	rdrand.IncorporateEntropy(NULL, 0);
-
-	if (!(entropy && compress && discard))
-		cout.flush();
-
-	return entropy && compress && discard;
-}
-#endif
-
-#if (CRYPTOPP_BOOL_X86 || CRYPTOPP_BOOL_X32 || CRYPTOPP_BOOL_X64)
-bool TestRDSEED()
-{
-	// Testing on 5th generation i5 shows RDSEED needs about 128 retries for 10K bytes
-	//  on 64-bit/amd64 VM, and it needs more for an 32-bit/i686 VM.
-	RDSEED rdseed(256);
-	bool entropy = true, compress = true, discard = true;
-	static const unsigned int SIZE = 10000;
-
-	if (HasRDSEED())
-	{
-		cout << "\nTesting RDSEED generator...\n\n";
-
-		MeterFilter meter(new Redirector(TheBitBucket()));
-		Deflator deflator(new Redirector(meter));
-		MaurerRandomnessTest maurer;
-
-		ChannelSwitch chsw;
-		chsw.AddDefaultRoute(deflator);
-		chsw.AddDefaultRoute(maurer);
-
-		RandomNumberSource rns(rdseed, SIZE, true, new Redirector(chsw));
-		deflator.Flush(true);
-
-		assert(0 == maurer.BytesNeeded());
-		const double mv = maurer.GetTestValue();
-		if (mv < 0.98f)
-		{
-			cout << "FAILED:";
-			entropy = false;
-		}
-		else
-			cout << "passed:";
-
-		// Coverity finding, also see http://stackoverflow.com/a/34509163/608639.
-		StreamState ss(cout);
-		cout << std::setiosflags(std::ios::fixed) << std::setprecision(6);
-		cout << "  Maurer Randomness Test returned value " << mv << endl;
-
-		if (meter.GetTotalBytes() < SIZE)
-		{
-			cout << "FAILED:";
-			compress = false;
-		}
-		else
-			cout << "passed:";
-		cout << "  " << SIZE << " generated bytes compressed to " << meter.GetTotalBytes() << " bytes by DEFLATE\n";
-
-		try
-		{
-			rdseed.DiscardBytes(SIZE);
-		}
-		catch(const Exception&)
-		{
-			discard = false;
-		}
-
-		if (!discard)
-			cout << "FAILED:";
-		else
-			cout << "passed:";
-		cout << "  discarded " << SIZE << " bytes\n";
-	}
-	else
-		cout << "\nRDSEED generator not available, skipping test.\n";
-
-	// Squash code coverage warnings on unused functions
-	(void)rdseed.AlgorithmName();
-	(void)rdseed.CanIncorporateEntropy();
-	rdseed.SetRetries(rdseed.GetRetries());
-	rdseed.IncorporateEntropy(NULL, 0);
-
-	if (!(entropy && compress && discard))
-		cout.flush();
-
-	return entropy && compress && discard;
-}
-#endif
 
 // VC50 workaround
 typedef auto_ptr<BlockTransformation> apbt;
@@ -1281,8 +472,6 @@ public:
 	}
 	size_t Put2(const byte *inString, size_t length, int messageEnd, bool blocking)
 	{
-		CRYPTOPP_UNUSED(messageEnd), CRYPTOPP_UNUSED(blocking);
-
 		while (length--)
 			FilterTester::PutByte(*inString++);
 
@@ -1325,12 +514,12 @@ bool ValidateDES()
 {
 	cout << "\nDES validation suite running...\n\n";
 
-	FileSource valdata(CRYPTOPP_DATA_DIR "TestData/descert.dat", true, new HexDecoder);
+	FileSource valdata("TestData/descert.dat", true, new HexDecoder);
 	bool pass = BlockTransformationTest(FixedRoundsCipherFactory<DESEncryption, DESDecryption>(), valdata);
 
 	cout << "\nTesting EDE2, EDE3, and XEX3 variants...\n\n";
 
-	FileSource valdata1(CRYPTOPP_DATA_DIR "TestData/3desval.dat", true, new HexDecoder);
+	FileSource valdata1("TestData/3desval.dat", true, new HexDecoder);
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<DES_EDE2_Encryption, DES_EDE2_Decryption>(), valdata1, 1) && pass;
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<DES_EDE3_Encryption, DES_EDE3_Decryption>(), valdata1, 1) && pass;
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<DES_XEX3_Encryption, DES_XEX3_Decryption>(), valdata1, 1) && pass;
@@ -1342,11 +531,9 @@ bool TestModeIV(SymmetricCipher &e, SymmetricCipher &d)
 {
 	SecByteBlock lastIV, iv(e.IVSize());
 	StreamTransformationFilter filter(e, new StreamTransformationFilter(d));
-	
-	// vector_ptr<byte> due to Enterprise Analysis finding on the stack based array.
-	vector_ptr<byte> plaintext(20480);
+	byte plaintext[20480];
 
-	for (unsigned int i=1; i<20480; i*=2)
+	for (unsigned int i=1; i<sizeof(plaintext); i*=2)
 	{
 		e.GetNextIV(GlobalRNG(), iv);
 		if (iv == lastIV)
@@ -1465,20 +652,20 @@ bool ValidateCipherModes()
 		cout << (fail ? "FAILED   " : "passed   ") << "CBC decryption with one-and-zeros padding" << endl;
 	}
 	{
-		const byte plain_1[] = {'a', 0, 0, 0, 0, 0, 0, 0};
+		const byte plain[] = {'a', 0, 0, 0, 0, 0, 0, 0};
 		// generated with Crypto++
 		const byte encrypted[] = {
 			0x9B, 0x47, 0x57, 0x59, 0xD6, 0x9C, 0xF6, 0xD0};
 
 		CBC_Mode_ExternalCipher::Encryption modeE(desE, iv);
 		fail = !TestFilter(StreamTransformationFilter(modeE, NULL, StreamTransformationFilter::ZEROS_PADDING).Ref(),
-			plain_1, 1, encrypted, sizeof(encrypted));
+			plain, 1, encrypted, sizeof(encrypted));
 		pass = pass && !fail;
 		cout << (fail ? "FAILED   " : "passed   ") << "CBC encryption with zeros padding" << endl;
 
 		CBC_Mode_ExternalCipher::Decryption modeD(desD, iv);
 		fail = !TestFilter(StreamTransformationFilter(modeD, NULL, StreamTransformationFilter::ZEROS_PADDING).Ref(),
-			encrypted, sizeof(encrypted), plain_1, sizeof(plain_1));
+			encrypted, sizeof(encrypted), plain, sizeof(plain));
 		pass = pass && !fail;
 		cout << (fail ? "FAILED   " : "passed   ") << "CBC decryption with zeros padding" << endl;
 	}
@@ -1550,20 +737,20 @@ bool ValidateCipherModes()
 		cout << (fail ? "FAILED   " : "passed   ") << "CFB mode IV generation" << endl;
 	}
 	{
-		const byte plain_2[] = {	// "Now is the." without tailing 0
+		const byte plain[] = {	// "Now is the." without tailing 0
 			0x4e,0x6f,0x77,0x20,0x69,0x73,0x20,0x74,0x68,0x65};
 		const byte encrypted[] = {	// from FIPS 81
 			0xf3,0x1f,0xda,0x07,0x01,0x14,0x62,0xee,0x18,0x7f};
 
 		CFB_Mode_ExternalCipher::Encryption modeE(desE, iv, 1);
 		fail = !TestFilter(StreamTransformationFilter(modeE).Ref(),
-			plain_2, sizeof(plain_2), encrypted, sizeof(encrypted));
+			plain, sizeof(plain), encrypted, sizeof(encrypted));
 		pass = pass && !fail;
 		cout << (fail ? "FAILED   " : "passed   ") << "CFB (8-bit feedback) encryption" << endl;
 
 		CFB_Mode_ExternalCipher::Decryption modeD(desE, iv, 1);
 		fail = !TestFilter(StreamTransformationFilter(modeD).Ref(),
-			encrypted, sizeof(encrypted), plain_2, sizeof(plain_2));
+			encrypted, sizeof(encrypted), plain, sizeof(plain));
 		pass = pass && !fail;
 		cout << (fail ? "FAILED   " : "passed   ") << "CFB (8-bit feedback) decryption" << endl;
 
@@ -1616,7 +803,7 @@ bool ValidateCipherModes()
 		cout << (fail ? "FAILED   " : "passed   ") << "Counter Mode IV generation" << endl;
 	}
 	{
-		const byte plain_3[] = {	// "7654321 Now is the time for "
+		const byte plain[] = {	// "7654321 Now is the time for "
 			0x37, 0x36, 0x35, 0x34, 0x33, 0x32, 0x31, 0x20, 
 			0x4e, 0x6f, 0x77, 0x20, 0x69, 0x73, 0x20, 0x74, 
 			0x68, 0x65, 0x20, 0x74, 0x69, 0x6d, 0x65, 0x20, 
@@ -1628,13 +815,13 @@ bool ValidateCipherModes()
 
 		CBC_MAC<DES> cbcmac(key);
 		HashFilter cbcmacFilter(cbcmac);
-		fail = !TestFilter(cbcmacFilter, plain_3, sizeof(plain_3), mac1, sizeof(mac1));
+		fail = !TestFilter(cbcmacFilter, plain, sizeof(plain), mac1, sizeof(mac1));
 		pass = pass && !fail;
 		cout << (fail ? "FAILED   " : "passed   ") << "CBC MAC" << endl;
 
 		DMAC<DES> dmac(key);
 		HashFilter dmacFilter(dmac);
-		fail = !TestFilter(dmacFilter, plain_3, sizeof(plain_3), mac2, sizeof(mac2));
+		fail = !TestFilter(dmacFilter, plain, sizeof(plain), mac2, sizeof(mac2));
 		pass = pass && !fail;
 		cout << (fail ? "FAILED   " : "passed   ") << "DMAC" << endl;
 	}
@@ -1674,7 +861,7 @@ bool ValidateIDEA()
 {
 	cout << "\nIDEA validation suite running...\n\n";
 
-	FileSource valdata(CRYPTOPP_DATA_DIR "TestData/ideaval.dat", true, new HexDecoder);
+	FileSource valdata("TestData/ideaval.dat", true, new HexDecoder);
 	return BlockTransformationTest(FixedRoundsCipherFactory<IDEAEncryption, IDEADecryption>(), valdata);
 }
 
@@ -1682,7 +869,7 @@ bool ValidateSAFER()
 {
 	cout << "\nSAFER validation suite running...\n\n";
 
-	FileSource valdata(CRYPTOPP_DATA_DIR "TestData/saferval.dat", true, new HexDecoder);
+	FileSource valdata("TestData/saferval.dat", true, new HexDecoder);
 	bool pass = true;
 	pass = BlockTransformationTest(VariableRoundsCipherFactory<SAFER_K_Encryption, SAFER_K_Decryption>(8,6), valdata, 4) && pass;
 	pass = BlockTransformationTest(VariableRoundsCipherFactory<SAFER_K_Encryption, SAFER_K_Decryption>(16,12), valdata, 4) && pass;
@@ -1695,7 +882,7 @@ bool ValidateRC2()
 {
 	cout << "\nRC2 validation suite running...\n\n";
 
-	FileSource valdata(CRYPTOPP_DATA_DIR "TestData/rc2val.dat", true, new HexDecoder);
+	FileSource valdata("TestData/rc2val.dat", true, new HexDecoder);
 	HexEncoder output(new FileSink(cout));
 	SecByteBlock plain(RC2Encryption::BLOCKSIZE), cipher(RC2Encryption::BLOCKSIZE), out(RC2Encryption::BLOCKSIZE), outplain(RC2Encryption::BLOCKSIZE);
 	SecByteBlock key(128);
@@ -1861,7 +1048,7 @@ bool ValidateARC4()
 	// VC60 workaround: auto_ptr lacks reset()
 	member_ptr<Weak::ARC4> arc4;
 	bool pass=true, fail;
-	unsigned int i;
+	int i;
 
 	cout << "\nARC4 validation suite running...\n\n";
 
@@ -1905,7 +1092,7 @@ bool ValidateRC5()
 {
 	cout << "\nRC5 validation suite running...\n\n";
 
-	FileSource valdata(CRYPTOPP_DATA_DIR "TestData/rc5val.dat", true, new HexDecoder);
+	FileSource valdata("TestData/rc5val.dat", true, new HexDecoder);
 	return BlockTransformationTest(VariableRoundsCipherFactory<RC5Encryption, RC5Decryption>(16, 12), valdata);
 }
 
@@ -1913,7 +1100,7 @@ bool ValidateRC6()
 {
 	cout << "\nRC6 validation suite running...\n\n";
 
-	FileSource valdata(CRYPTOPP_DATA_DIR "TestData/rc6val.dat", true, new HexDecoder);
+	FileSource valdata("TestData/rc6val.dat", true, new HexDecoder);
 	bool pass = true;
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<RC6Encryption, RC6Decryption>(16), valdata, 2) && pass;
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<RC6Encryption, RC6Decryption>(24), valdata, 2) && pass;
@@ -1925,7 +1112,7 @@ bool ValidateMARS()
 {
 	cout << "\nMARS validation suite running...\n\n";
 
-	FileSource valdata(CRYPTOPP_DATA_DIR "TestData/marsval.dat", true, new HexDecoder);
+	FileSource valdata("TestData/marsval.dat", true, new HexDecoder);
 	bool pass = true;
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<MARSEncryption, MARSDecryption>(16), valdata, 4) && pass;
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<MARSEncryption, MARSDecryption>(24), valdata, 3) && pass;
@@ -1937,12 +1124,12 @@ bool ValidateRijndael()
 {
 	cout << "\nRijndael (AES) validation suite running...\n\n";
 
-	FileSource valdata(CRYPTOPP_DATA_DIR "TestData/rijndael.dat", true, new HexDecoder);
+	FileSource valdata("TestData/rijndael.dat", true, new HexDecoder);
 	bool pass = true;
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<RijndaelEncryption, RijndaelDecryption>(16), valdata, 4) && pass;
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<RijndaelEncryption, RijndaelDecryption>(24), valdata, 3) && pass;
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<RijndaelEncryption, RijndaelDecryption>(32), valdata, 2) && pass;
-	pass = RunTestDataFile(CRYPTOPP_DATA_DIR "TestVectors/aes.txt") && pass;
+	pass = RunTestDataFile("TestVectors/aes.txt") && pass;
 	return pass;
 }
 
@@ -1950,7 +1137,7 @@ bool ValidateTwofish()
 {
 	cout << "\nTwofish validation suite running...\n\n";
 
-	FileSource valdata(CRYPTOPP_DATA_DIR "TestData/twofishv.dat", true, new HexDecoder);
+	FileSource valdata("TestData/twofishv.dat", true, new HexDecoder);
 	bool pass = true;
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<TwofishEncryption, TwofishDecryption>(16), valdata, 4) && pass;
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<TwofishEncryption, TwofishDecryption>(24), valdata, 3) && pass;
@@ -1962,7 +1149,7 @@ bool ValidateSerpent()
 {
 	cout << "\nSerpent validation suite running...\n\n";
 
-	FileSource valdata(CRYPTOPP_DATA_DIR "TestData/serpentv.dat", true, new HexDecoder);
+	FileSource valdata("TestData/serpentv.dat", true, new HexDecoder);
 	bool pass = true;
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<SerpentEncryption, SerpentDecryption>(16), valdata, 5) && pass;
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<SerpentEncryption, SerpentDecryption>(24), valdata, 4) && pass;
@@ -2008,7 +1195,7 @@ bool ValidateThreeWay()
 {
 	cout << "\n3-WAY validation suite running...\n\n";
 
-	FileSource valdata(CRYPTOPP_DATA_DIR "TestData/3wayval.dat", true, new HexDecoder);
+	FileSource valdata("TestData/3wayval.dat", true, new HexDecoder);
 	return BlockTransformationTest(FixedRoundsCipherFactory<ThreeWayEncryption, ThreeWayDecryption>(), valdata);
 }
 
@@ -2016,7 +1203,7 @@ bool ValidateGOST()
 {
 	cout << "\nGOST validation suite running...\n\n";
 
-	FileSource valdata(CRYPTOPP_DATA_DIR "TestData/gostval.dat", true, new HexDecoder);
+	FileSource valdata("TestData/gostval.dat", true, new HexDecoder);
 	return BlockTransformationTest(FixedRoundsCipherFactory<GOSTEncryption, GOSTDecryption>(), valdata);
 }
 
@@ -2024,7 +1211,7 @@ bool ValidateSHARK()
 {
 	cout << "\nSHARK validation suite running...\n\n";
 
-	FileSource valdata(CRYPTOPP_DATA_DIR "TestData/sharkval.dat", true, new HexDecoder);
+	FileSource valdata("TestData/sharkval.dat", true, new HexDecoder);
 	return BlockTransformationTest(FixedRoundsCipherFactory<SHARKEncryption, SHARKDecryption>(), valdata);
 }
 
@@ -2034,14 +1221,14 @@ bool ValidateCAST()
 
 	cout << "\nCAST-128 validation suite running...\n\n";
 
-	FileSource val128(CRYPTOPP_DATA_DIR "TestData/cast128v.dat", true, new HexDecoder);
+	FileSource val128("TestData/cast128v.dat", true, new HexDecoder);
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<CAST128Encryption, CAST128Decryption>(16), val128, 1) && pass;
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<CAST128Encryption, CAST128Decryption>(10), val128, 1) && pass;
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<CAST128Encryption, CAST128Decryption>(5), val128, 1) && pass;
 
 	cout << "\nCAST-256 validation suite running...\n\n";
 
-	FileSource val256(CRYPTOPP_DATA_DIR "TestData/cast256v.dat", true, new HexDecoder);
+	FileSource val256("TestData/cast256v.dat", true, new HexDecoder);
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<CAST256Encryption, CAST256Decryption>(16), val256, 1) && pass;
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<CAST256Encryption, CAST256Decryption>(24), val256, 1) && pass;
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<CAST256Encryption, CAST256Decryption>(32), val256, 1) && pass;
@@ -2053,7 +1240,7 @@ bool ValidateSquare()
 {
 	cout << "\nSquare validation suite running...\n\n";
 
-	FileSource valdata(CRYPTOPP_DATA_DIR "TestData/squareva.dat", true, new HexDecoder);
+	FileSource valdata("TestData/squareva.dat", true, new HexDecoder);
 	return BlockTransformationTest(FixedRoundsCipherFactory<SquareEncryption, SquareDecryption>(), valdata);
 }
 
@@ -2061,7 +1248,7 @@ bool ValidateSKIPJACK()
 {
 	cout << "\nSKIPJACK validation suite running...\n\n";
 
-	FileSource valdata(CRYPTOPP_DATA_DIR "TestData/skipjack.dat", true, new HexDecoder);
+	FileSource valdata("TestData/skipjack.dat", true, new HexDecoder);
 	return BlockTransformationTest(FixedRoundsCipherFactory<SKIPJACKEncryption, SKIPJACKDecryption>(), valdata);
 }
 
@@ -2098,8 +1285,8 @@ bool ValidateBaseCode()
 	bool pass = true, fail;
 	byte data[255];
 	for (unsigned int i=0; i<255; i++)
-		data[i] = byte(i);
-	static const char hexEncoded[] = 
+		data[i] = i;
+	const char *hexEncoded = 
 "000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F2021222324252627"
 "28292A2B2C2D2E2F303132333435363738393A3B3C3D3E3F404142434445464748494A4B4C4D4E4F"
 "505152535455565758595A5B5C5D5E5F606162636465666768696A6B6C6D6E6F7071727374757677"
@@ -2107,7 +1294,7 @@ bool ValidateBaseCode()
 "A0A1A2A3A4A5A6A7A8A9AAABACADAEAFB0B1B2B3B4B5B6B7B8B9BABBBCBDBEBFC0C1C2C3C4C5C6C7"
 "C8C9CACBCCCDCECFD0D1D2D3D4D5D6D7D8D9DADBDCDDDEDFE0E1E2E3E4E5E6E7E8E9EAEBECEDEEEF"
 "F0F1F2F3F4F5F6F7F8F9FAFBFCFDFE";
-	static const char base32Encoded[] = 
+	const char *base32Encoded = 
 "AAASEA2EAWDAQCAJBIFS2DIQB6IBCESVCSKTNF22DEPBYHA7D2RUAIJCENUCKJTHFAWUWK3NFWZC8NBT"
 "GI3VIPJYG66DUQT5HS8V6R4AIFBEGTCFI3DWSUKKJPGE4VURKBIXEW4WKXMFQYC3MJPX2ZK8M7SGC2VD"
 "NTUYN35IPFXGY5DPP3ZZA6MUQP4HK7VZRB6ZW856RX9H9AEBSKB2JBNGS8EIVCWMTUG27D6SUGJJHFEX"
@@ -2165,7 +1352,7 @@ bool ValidateSHACAL2()
 	cout << "\nSHACAL-2 validation suite running...\n\n";
 
 	bool pass = true;
-	FileSource valdata(CRYPTOPP_DATA_DIR "TestData/shacal2v.dat", true, new HexDecoder);
+	FileSource valdata("TestData/shacal2v.dat", true, new HexDecoder);
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<SHACAL2Encryption, SHACAL2Decryption>(16), valdata, 4) && pass;
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<SHACAL2Encryption, SHACAL2Decryption>(64), valdata, 10) && pass;
 	return pass;
@@ -2176,7 +1363,7 @@ bool ValidateCamellia()
 	cout << "\nCamellia validation suite running...\n\n";
 
 	bool pass = true;
-	FileSource valdata(CRYPTOPP_DATA_DIR "TestData/camellia.dat", true, new HexDecoder);
+	FileSource valdata("TestData/camellia.dat", true, new HexDecoder);
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<CamelliaEncryption, CamelliaDecryption>(16), valdata, 15) && pass;
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<CamelliaEncryption, CamelliaDecryption>(24), valdata, 15) && pass;
 	pass = BlockTransformationTest(FixedRoundsCipherFactory<CamelliaEncryption, CamelliaDecryption>(32), valdata, 15) && pass;
@@ -2187,38 +1374,38 @@ bool ValidateSalsa()
 {
 	cout << "\nSalsa validation suite running...\n";
 
-	return RunTestDataFile(CRYPTOPP_DATA_DIR "TestVectors/salsa.txt");
+	return RunTestDataFile("TestVectors/salsa.txt");
 }
 
 bool ValidateSosemanuk()
 {
 	cout << "\nSosemanuk validation suite running...\n";
-	return RunTestDataFile(CRYPTOPP_DATA_DIR "TestVectors/sosemanuk.txt");
+	return RunTestDataFile("TestVectors/sosemanuk.txt");
 }
 
 bool ValidateVMAC()
 {
 	cout << "\nVMAC validation suite running...\n";
-	return RunTestDataFile(CRYPTOPP_DATA_DIR "TestVectors/vmac.txt");
+	return RunTestDataFile("TestVectors/vmac.txt");
 }
 
 bool ValidateCCM()
 {
 	cout << "\nAES/CCM validation suite running...\n";
-	return RunTestDataFile(CRYPTOPP_DATA_DIR "TestVectors/ccm.txt");
+	return RunTestDataFile("TestVectors/ccm.txt");
 }
 
 bool ValidateGCM()
 {
 	cout << "\nAES/GCM validation suite running...\n";
 	cout << "\n2K tables:";
-	bool pass = RunTestDataFile(CRYPTOPP_DATA_DIR "TestVectors/gcm.txt", MakeParameters(Name::TableSize(), (int)2048));
+	bool pass = RunTestDataFile("TestVectors/gcm.txt", MakeParameters(Name::TableSize(), (int)2048));
 	cout << "\n64K tables:";
-	return RunTestDataFile(CRYPTOPP_DATA_DIR "TestVectors/gcm.txt", MakeParameters(Name::TableSize(), (int)64*1024)) && pass;
+	return RunTestDataFile("TestVectors/gcm.txt", MakeParameters(Name::TableSize(), (int)64*1024)) && pass;
 }
 
 bool ValidateCMAC()
 {
 	cout << "\nCMAC validation suite running...\n";
-	return RunTestDataFile(CRYPTOPP_DATA_DIR "TestVectors/cmac.txt");
+	return RunTestDataFile("TestVectors/cmac.txt");
 }
